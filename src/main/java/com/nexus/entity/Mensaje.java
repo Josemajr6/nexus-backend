@@ -1,33 +1,36 @@
 package com.nexus.entity;
 
-import java.sql.Date;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.ManyToOne;
 import jakarta.validation.constraints.NotNull;
 
 @Entity
 public class Mensaje extends DomainEntity{
 
 	@NotNull
-	private Date fechaCreacion;
+	private LocalDateTime fechaCreacion;
 	
-	private boolean estaActivo;
+	@NotNull
+	private Boolean estaActivo;
+	
+	@ManyToOne
+	private Usuario usuario;
 
+	@ManyToOne
+	private Producto producto;
+	
 	public Mensaje() {
 		super();
+		this.estaActivo = true;
 	}
 
-	public Mensaje(@NotNull Date fechaCreacion, boolean estaActivo) {
-		super();
-		this.fechaCreacion = fechaCreacion;
-		this.estaActivo = estaActivo;
-	}
-
-	public Date getFechaCreacion() {
+	public LocalDateTime getFechaCreacion() {
 		return fechaCreacion;
 	}
 
-	public void setFechaCreacion(Date fechaCreacion) {
+	public void setFechaCreacion(LocalDateTime fechaCreacion) {
 		this.fechaCreacion = fechaCreacion;
 	}
 
