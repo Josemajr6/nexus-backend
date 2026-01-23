@@ -37,20 +37,25 @@ public class SecurityConfiguration {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // 1. Configuración de CORS para Angular
             .cors(cors -> cors.configurationSource(request -> {
                 CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(List.of("http://localhost:4200")); // URL de Angular
+                config.setAllowedOrigins(List.of(
+                    "http://localhost:4200", 
+                    "https://nexus-app.es", 
+                    "https://www.nexus-app.es"
+                )); 
                 config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
                 config.setAllowedHeaders(List.of("*"));
+                config.setAllowCredentials(true);
                 return config;
             }))
+            
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // --- Rutas PÚBLICAS ---
-            	.requestMatchers("/auth/**").permitAll() // Esto permite login, registro y verificar
-            	.requestMatchers(HttpMethod.GET, "/producto", "/producto/**").permitAll()
+                // --- Rutas PÚBLICAS (Corregido con el prefijo /auth) ---
+                .requestMatchers("/auth/**").permitAll() 
+                .requestMatchers(HttpMethod.GET, "/producto", "/producto/**").permitAll()
                 
                 // --- Rutas SWAGGER (Documentación) ---
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
@@ -61,8 +66,7 @@ public class SecurityConfiguration {
                 // --- Rutas EMPRESA ---
                 .requestMatchers("/empresa/**").hasAuthority("EMPRESA")
 
-                // --- GESTIÓN DE PRODUCTOS (Corregido según UML) ---
-                // Tanto Empresas como Usuarios pueden publicar, editar y borrar productos
+                // --- GESTIÓN DE PRODUCTOS ---
                 .requestMatchers(HttpMethod.POST, "/producto").hasAnyAuthority("EMPRESA", "USUARIO") 
                 .requestMatchers(HttpMethod.PUT, "/producto/**").hasAnyAuthority("EMPRESA", "USUARIO")
                 .requestMatchers(HttpMethod.DELETE, "/producto/**").hasAnyAuthority("EMPRESA", "USUARIO")
@@ -75,7 +79,7 @@ public class SecurityConfiguration {
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
+            
         return http.build();
     }
 }
