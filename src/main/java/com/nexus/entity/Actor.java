@@ -24,13 +24,11 @@ public abstract class Actor extends DomainEntity {
     private String user;
     
     @NotBlank
-    @Pattern(regexp = "^\\w[@]\\w[.]\\w$")
+    @Pattern(regexp = "^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$")
     @Column(unique = true) 
     private String email;
     
     @NotBlank
-    @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&+=])(?=\\\\S+$).{8,}$")
-    @JsonIgnore 
     private String password;
     
     private LocalDateTime fechaRegistro;
