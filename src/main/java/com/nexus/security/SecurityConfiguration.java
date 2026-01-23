@@ -49,8 +49,8 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // --- Rutas PÚBLICAS ---
-                .requestMatchers(HttpMethod.POST, "/login").permitAll() 
-                .requestMatchers(HttpMethod.GET, "/producto", "/producto/**").permitAll() 
+            	.requestMatchers("/auth/**").permitAll() // Esto permite login, registro y verificar
+            	.requestMatchers(HttpMethod.GET, "/producto", "/producto/**").permitAll()
                 
                 // --- Rutas SWAGGER (Documentación) ---
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
