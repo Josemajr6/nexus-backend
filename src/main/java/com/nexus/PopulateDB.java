@@ -11,7 +11,6 @@ import com.nexus.entity.Admin;
 import com.nexus.entity.Comentario;
 import com.nexus.entity.Contrato;
 import com.nexus.entity.Empresa;
-import com.nexus.entity.EstadoProducto;
 import com.nexus.entity.Mensaje;
 import com.nexus.entity.Oferta;
 import com.nexus.entity.Producto;
@@ -65,58 +64,61 @@ public class PopulateDB {
         maria.setEsVerificado(true);
         maria.setReputacion(5);
         maria.setBiografia("Fan de la tecnología");
-        maria.setFotoPerfil("https://i.pravatar.cc/150?u=alice");
+        maria.setFotoPerfil("https://i.pravatar.cc/150?u=alice"); // Foto placeholder
         maria = usuarioRepository.save(maria);
         
-        Usuario bob = new Usuario();
-        bob.setUser("bob_smith");
-        bob.setEmail("bob@gmail.com");
-        bob.setPassword(passwordEncoder.encode("Usuario123!"));
-        bob.setTelefono("600999888");
-        bob.setUbicacion("Barcelona");
-        bob.setEsVerificado(true);
-        bob.setReputacion(3);
-        bob = usuarioRepository.save(bob);
+        Usuario pepe = new Usuario();
+        pepe.setUser("Pepe");
+        pepe.setEmail("pepe@gmail.com");
+        pepe.setPassword(passwordEncoder.encode("Usuario123!"));
+        pepe.setTelefono("600999888");
+        pepe.setUbicacion("Sevilla");
+        pepe.setEsVerificado(true);
+        pepe.setReputacion(3);
+        pepe = usuarioRepository.save(pepe);
 
-        Empresa techCorp = new Empresa();
-        techCorp.setUser("EcentiaMarketing");
-        techCorp.setEmail("contacto@ecentia.com");
-        techCorp.setPassword(passwordEncoder.encode("Empresa123!"));
-        techCorp.setCif("B12345678");
-        techCorp = empresaRepository.save(techCorp);
+        Empresa ecentia = new Empresa();
+        ecentia.setUser("EcentiaMarketing");
+        ecentia.setEmail("contacto@ecentia.com");
+        ecentia.setPassword(passwordEncoder.encode("Empresa123!"));
+        ecentia.setCif("B12345678");
+        ecentia = empresaRepository.save(ecentia);
 
-        System.out.println("✅ Actores creados.");
+        System.out.println("✅ Actores creados (MariaPepa, Bob y Ecentia).");
 
-        // --- 2. PRODUCTOS ---
+        // --- 2. PRODUCTOS (De Maria Pepa) ---
         Producto p1 = new Producto("iPhone 13", "Como nuevo", 600.0, TipoOferta.VENTA, maria, "https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5");
         Producto p2 = new Producto("PS5", "Con 2 mandos", 450.0, TipoOferta.VENTA, maria, "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3");
         productoRepository.saveAll(List.of(p1, p2));
         System.out.println("✅ Productos creados.");
 
         // --- 3. MENSAJES ---
-        Mensaje m1 = new Mensaje("Hola, ¿sigue disponible?", bob, p1);
+        Mensaje m1 = new Mensaje("Hola, ¿sigue disponible?", bobpepe, p1);
         Mensaje m2 = new Mensaje("Sí, claro. ¿Te interesa?", maria, p1);
         mensajeRepository.saveAll(List.of(m1, m2));
         System.out.println("✅ Mensajes creados.");
 
         // --- 4. CONTRATOS ---
         Contrato c1 = new Contrato();
-        c1.setEmpresa(techCorp);
+        c1.setEmpresa(ecentia);
         c1.setTipoContrato(TipoContrato.BANNER);
         contratoRepository.save(c1);
         System.out.println("✅ Contratos creados.");
 
         // --- 5. OFERTAS Y COMENTARIOS ---
         Oferta off1 = new Oferta();
-        off1.setActor(techCorp);
+        off1.setActor(ecentia); // Publicada por Ecentia
+        // CAMPOS NUEVOS OBLIGATORIOS:
+        off1.setTitulo("Rebajas de Primavera");
+        off1.setDescripcion("Descuentos exclusivos en nuestra web.");
         off1.setTienda("Ecentia Store");
-        off1.setUrlOferta("https://ecentia.es/promo");
+        off1.setUrlOferta("https://ecentia.es/promo"); // Simulamos foto banner
         off1.setPrecioOriginal(100.0);
         off1.setPrecioOferta(80.0);
         off1.setFechaExpiracion(LocalDateTime.now().plusDays(10));
         off1 = ofertaRepository.save(off1);
         
-        Comentario com1 = new Comentario("Gran oferta!", off1, maria);
+        Comentario com1 = new Comentario("Gran oferta!", off1, maria); // Maria comenta
         comentarioRepository.save(com1);
         
         System.out.println("✅ Ofertas y Comentarios creados.");

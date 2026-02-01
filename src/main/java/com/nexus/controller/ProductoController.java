@@ -5,11 +5,14 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.nexus.entity.Producto;
 import com.nexus.service.ProductoService;
+import com.nexus.service.StorageService; // <--- Importante
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +24,9 @@ public class ProductoController {
 
     @Autowired
     private ProductoService productoService;
+    
+    @Autowired
+    private StorageService storageService; // <--- NUEVO SERVICIO
 
     @GetMapping
     @Operation(summary = "Obtener todos los productos")
@@ -48,9 +54,21 @@ public class ProductoController {
         }
     }
 
-    @PostMapping("/publicar/{usuarioId}")
-    @Operation(summary = "Publicar un nuevo producto vinculado a un usuario")
-    public ResponseEntity<Object> publicar(@RequestBody Producto producto, @PathVariable Integer usuarioId) {
+    // --- MODIFICADO: PUBLICAR CON FOTO ---
+    @PostMapping(value = "/publicar/{usuarioId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Publicar un nuevo producto con foto (Multipart)")
+    public ResponseEntity<Object> publicar(
+            @RequestPart("producto") Producto producto, // Cambiado @RequestBody por @RequestPart para mezclar JSON y File
+            @RequestPart(value = "file", required = false) MultipartFile file, // Archivo opcional
+            @PathVariable Integer usuarioId) {
+        
+        // 1. Si hay foto, la subimos primero
+        if (file != null && !file.isEmpty()) {
+            String urlImagen = storageService.subirImagen(file);
+            producto.setImagenUrl(urlImagen); // Asegúrate que Producto tiene setImagenUrl
+        }
+
+        // 2. Llamamos al servicio original que ya tenías
         Producto nuevoProducto = productoService.publicar(producto, usuarioId);
         
         if (nuevoProducto != null) {

@@ -1,6 +1,7 @@
 package com.nexus.controller;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +26,7 @@ public class MensajeController {
     private MensajeService mensajeService;
 
     @GetMapping
-    @Operation(summary = "Obtener todos los mensajes")
+    @Operation(summary = "Obtener todos los mensajes (Admin)")
     public ResponseEntity<List<Mensaje>> findAll() {
         return ResponseEntity.ok(mensajeService.findAll());
     }
@@ -42,22 +43,33 @@ public class MensajeController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
+    // --- CHAT ORDENADO (Estilo WhatsApp) ---
     @GetMapping("/producto/{productoId}")
-    @Operation(summary = "Obtener chat de un producto")
+    @Operation(summary = "Obtener chat de un producto (Ordenado cronológicamente)")
     public ResponseEntity<List<Mensaje>> findByProducto(@PathVariable Integer productoId) {
+        // Asegúrate de que tu MensajeService.findByProductoId devuelve la lista con Sort.by("fechaCreacion")
         List<Mensaje> mensajes = mensajeService.findByProductoId(productoId);
         return ResponseEntity.ok(mensajes);
     }
 
+    // --- ENVIAR MENSAJE (Validando texto) ---
     @PostMapping("/enviar")
-    @Operation(summary = "Enviar un mensaje")
+    @Operation(summary = "Enviar un mensaje de texto")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Mensaje enviado"),
-            @ApiResponse(responseCode = "400", description = "Usuario o Producto no encontrados")
+            @ApiResponse(responseCode = "201", description = "Mensaje enviado exitosamente"),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos o mensaje vacío")
     })
-    public ResponseEntity<Object> save(@RequestBody Mensaje mensaje, 
+    public ResponseEntity<Object> enviar(@RequestBody Map<String, String> body, 
                                        @RequestParam Integer usuarioId, 
                                        @RequestParam Integer productoId) {
+        
+        String texto = body.get("texto");
+        if (texto == null || texto.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("El mensaje no puede estar vacío");
+        }
+
+        Mensaje mensaje = new Mensaje();
+        mensaje.setTexto(texto);
         
         Mensaje nuevoMensaje = mensajeService.save(mensaje, usuarioId, productoId);
         

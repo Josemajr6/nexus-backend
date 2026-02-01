@@ -1,7 +1,7 @@
 package com.nexus.entity;
 
 public enum EstadoCompra {
-	ACEPTADO,
+	COMPLETADA,
     PENDIENTE,
-    RECHAZADO
+    CANCELADA
 }
