@@ -1,33 +1,31 @@
 package com.nexus.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 @Entity
 public class Contrato extends DomainEntity {
-	
-	private TipoContrato tipoContrato;
-	
-	@ManyToOne
-	private Empresa empresa;
+    
+    @Enumerated(EnumType.STRING)
+    private TipoContrato tipoContrato;
+    
+    private LocalDateTime fecha; // <-- Añadido según UML
+    
+    @ManyToOne
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
-	public Contrato() {
-		super();
-	}
+    public Contrato() {
+        super();
+        this.fecha = LocalDateTime.now();
+    }
 
-	public TipoContrato getTipoContrato() {
-		return tipoContrato;
-	}
+    public TipoContrato getTipoContrato() { return tipoContrato; }
+    public void setTipoContrato(TipoContrato tipoContrato) { this.tipoContrato = tipoContrato; }
 
-	public void setTipoContrato(TipoContrato tipoContrato) {
-		this.tipoContrato = tipoContrato;
-	}
+    public LocalDateTime getFecha() { return fecha; }
+    public void setFecha(LocalDateTime fecha) { this.fecha = fecha; }
 
-	public Empresa getEmpresa() {
-		return empresa;
-	}
-
-	public void setEmpresa(Empresa empresa) {
-		this.empresa = empresa;
-	}
+    public Empresa getEmpresa() { return empresa; }
+    public void setEmpresa(Empresa empresa) { this.empresa = empresa; }
 }

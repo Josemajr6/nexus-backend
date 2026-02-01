@@ -3,23 +3,22 @@ package com.nexus.entity;
 import jakarta.persistence.Entity;
 
 @Entity
-public class Admin extends Actor {
-	private Integer nivelAcceso;
+public class Admin extends Actor { // <--- CAMBIO: Extends Actor
 
-	public Admin() {
-		super();
-	}
+    private int nivelAcceso;
 
-	public Admin(Integer nivelAcceso) {
-		super();
-		this.nivelAcceso = nivelAcceso;
-	}
+    public Admin() {
+        super();
+    }
 
-	public Integer getNivelAcceso() {
-		return nivelAcceso;
-	}
+    public Admin(String user, String email, String password, int nivelAcceso) {
+        super();
+        this.user = user;
+        this.email = email;
+        this.password = password;
+        this.nivelAcceso = nivelAcceso;
+    }
 
-	public void setNivelAcceso(Integer nivelAcceso) {
-		this.nivelAcceso = nivelAcceso;
-	}
+    public int getNivelAcceso() { return nivelAcceso; }
+    public void setNivelAcceso(int nivelAcceso) { this.nivelAcceso = nivelAcceso; }
 }

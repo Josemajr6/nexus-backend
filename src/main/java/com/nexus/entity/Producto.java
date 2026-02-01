@@ -19,6 +19,8 @@ public class Producto extends DomainEntity {
 
     @Min(0)
     private double precio;
+    
+    private String imagenUrl; // FOTO DEL PRODUCTO
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -41,13 +43,15 @@ public class Producto extends DomainEntity {
         this.estadoProducto = EstadoProducto.DISPONIBLE; 
     }
 
-    public Producto(String titulo, String descripcion, double precio, TipoOferta tipoOferta, Usuario publicador) {
+    // CONSTRUCTOR COMPLETO (Usado ahora por PopulateDB)
+    public Producto(String titulo, String descripcion, double precio, TipoOferta tipoOferta, Usuario publicador, String imagenUrl) {
         super();
         this.titulo = titulo;
         this.descripcion = descripcion;
         this.precio = precio;
         this.tipoOferta = tipoOferta;
         this.publicador = publicador;
+        this.imagenUrl = imagenUrl;
         this.estadoProducto = EstadoProducto.DISPONIBLE;
     }
 
@@ -61,59 +65,28 @@ public class Producto extends DomainEntity {
         mensaje.setProducto(null);
     }
 
-    public String getTitulo() {
-        return titulo;
-    }
+    // Getters y Setters
+    public String getTitulo() { return titulo; }
+    public void setTitulo(String titulo) { this.titulo = titulo; }
 
-    public void setTitulo(String titulo) {
-        this.titulo = titulo;
-    }
+    public String getDescripcion() { return descripcion; }
+    public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
 
-    public String getDescripcion() {
-        return descripcion;
-    }
+    public double getPrecio() { return precio; }
+    public void setPrecio(double precio) { this.precio = precio; }
 
-    public void setDescripcion(String descripcion) {
-        this.descripcion = descripcion;
-    }
+    public String getImagenUrl() { return imagenUrl; }
+    public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
 
-    public double getPrecio() {
-        return precio;
-    }
+    public TipoOferta getTipoOferta() { return tipoOferta; }
+    public void setTipoOferta(TipoOferta tipoOferta) { this.tipoOferta = tipoOferta; }
 
-    public void setPrecio(double precio) {
-        this.precio = precio;
-    }
+    public EstadoProducto getEstadoProducto() { return estadoProducto; }
+    public void setEstadoProducto(EstadoProducto estadoProducto) { this.estadoProducto = estadoProducto; }
 
-    public TipoOferta getTipoOferta() {
-        return tipoOferta;
-    }
+    public Usuario getPublicador() { return publicador; }
+    public void setPublicador(Usuario publicador) { this.publicador = publicador; }
 
-    public void setTipoOferta(TipoOferta tipoOferta) {
-        this.tipoOferta = tipoOferta;
-    }
-
-    public EstadoProducto getEstadoProducto() {
-        return estadoProducto;
-    }
-
-    public void setEstadoProducto(EstadoProducto estadoProducto) {
-        this.estadoProducto = estadoProducto;
-    }
-
-    public Usuario getPublicador() {
-        return publicador;
-    }
-
-    public void setPublicador(Usuario publicador) {
-        this.publicador = publicador;
-    }
-
-    public List<Mensaje> getMensajes() {
-        return mensajes;
-    }
-
-    public void setMensajes(List<Mensaje> mensajes) {
-        this.mensajes = mensajes;
-    }
+    public List<Mensaje> getMensajes() { return mensajes; }
+    public void setMensajes(List<Mensaje> mensajes) { this.mensajes = mensajes; }
 }

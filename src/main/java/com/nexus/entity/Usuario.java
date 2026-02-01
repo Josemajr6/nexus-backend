@@ -1,76 +1,68 @@
 package com.nexus.entity;
 
-import org.hibernate.validator.constraints.URL;
-
-import jakarta.persistence.Entity;
-import jakarta.validation.constraints.Min;
+import jakarta.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
+@PrimaryKeyJoinColumn(name = "id")
 public class Usuario extends Actor {
-	private String telefono;
-	private Boolean esVerificado;
-	
-	@URL
-	private String fotoPerfil;
-	
-	private String biografia;
-	
-	private String ubicacion;
-	
-	@Min(0)
-	private Integer reputacion;
 
-	public Usuario() {
-		super();
-		this.esVerificado = false;
-		this.reputacion = 0;
-	}
+    private String telefono;
+    
+    // CAMBIO: De Boolean (objeto) a boolean (primitivo)
+    private boolean esVerificado; 
+    
+    private String fotoPerfil;
+    private String biografia;
+    private Integer reputacion;
+    private String ubicacion;
 
-	public String getTelefono() {
-		return telefono;
-	}
+    @OneToMany(mappedBy = "publicador", cascade = CascadeType.ALL)
+    @JsonIgnore
+    private List<Producto> productos = new ArrayList<>();
 
-	public void setTelefono(String telefono) {
-		this.telefono = telefono;
-	}
+    @OneToMany(mappedBy = "comprador", cascade = CascadeType.ALL)
+    @JsonIgnore
+    private List<Compra> compras = new ArrayList<>();
 
-	public Boolean getEsVerificado() {
-		return esVerificado;
-	}
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL)
+    @JsonIgnore
+    private List<Mensaje> mensajes = new ArrayList<>();
 
-	public void setEsVerificado(Boolean esVerificado) {
-		this.esVerificado = esVerificado;
-	}
+    public Usuario() {
+        super();
+        this.esVerificado = false;
+        this.reputacion = 0;
+    }
 
-	public String getFotoPerfil() {
-		return fotoPerfil;
-	}
+    // Getters y Setters
+    public String getTelefono() { return telefono; }
+    public void setTelefono(String telefono) { this.telefono = telefono; }
 
-	public void setFotoPerfil(String fotoPerfil) {
-		this.fotoPerfil = fotoPerfil;
-	}
+    // CORREGIDO: Ahora sí existe isEsVerificado()
+    public boolean isEsVerificado() { return esVerificado; }
+    public void setEsVerificado(boolean esVerificado) { this.esVerificado = esVerificado; }
 
-	public String getBiografia() {
-		return biografia;
-	}
+    public String getFotoPerfil() { return fotoPerfil; }
+    public void setFotoPerfil(String fotoPerfil) { this.fotoPerfil = fotoPerfil; }
 
-	public void setBiografia(String biografia) {
-		this.biografia = biografia;
-	}
+    public String getBiografia() { return biografia; }
+    public void setBiografia(String biografia) { this.biografia = biografia; }
 
-	public String getUbicacion() {
-		return ubicacion;
-	}
+    public Integer getReputacion() { return reputacion; }
+    public void setReputacion(Integer reputacion) { this.reputacion = reputacion; }
 
-	public void setUbicacion(String ubicacion) {
-		this.ubicacion = ubicacion;
-	}
+    public String getUbicacion() { return ubicacion; }
+    public void setUbicacion(String ubicacion) { this.ubicacion = ubicacion; }
 
-	public Integer getReputacion() {
-		return reputacion;
-	}
+    public List<Producto> getProductos() { return productos; }
+    public void setProductos(List<Producto> productos) { this.productos = productos; }
 
-	public void setReputacion(Integer reputacion) {
-		this.reputacion = reputacion;
-	}
+    public List<Compra> getCompras() { return compras; }
+    public void setCompras(List<Compra> compras) { this.compras = compras; }
+
+    public List<Mensaje> getMensajes() { return mensajes; }
+    public void setMensajes(List<Mensaje> mensajes) { this.mensajes = mensajes; }
 }

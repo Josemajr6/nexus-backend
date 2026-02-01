@@ -9,12 +9,10 @@ import com.nexus.entity.Producto;
 @Repository
 public interface MensajeRepository extends JpaRepository<Mensaje, Integer> {
 
-    // Recuperar todos los mensajes asociados a un producto pasando la entidad completa
+    // Recuperar todos los mensajes asociados a un producto
     List<Mensaje> findByProducto(Producto producto);
-
-    // Recuperar mensajes usando directamente el ID del producto (más eficiente si solo tienes el ID)
-    List<Mensaje> findByProductoId(int productoId);
     
-    // Recuperar los mensajes de un producto ordenados por fecha (útil para mostrar el chat: los más recientes arriba)
-    List<Mensaje> findByProductoIdOrderByFechaCreacionDesc(int productoId);
+    // MEJORA CHAT: Mensajes ordenados por fecha ascendente (del más viejo al más nuevo)
+    // Esto es vital para que parezca una conversación real
+    List<Mensaje> findByProductoIdOrderByFechaCreacionAsc(int productoId);
 }

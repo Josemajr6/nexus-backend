@@ -1,63 +1,59 @@
 package com.nexus.entity;
 
 import java.time.LocalDateTime;
-import jakarta.persistence.Entity;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.JoinColumn;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 @Entity
 public class Mensaje extends DomainEntity {
 
+    @NotBlank
+    @Column(columnDefinition = "TEXT")
+    private String texto; // <-- Añadido según UML
+
     @NotNull
     private LocalDateTime fechaCreacion;
     
-    @NotNull
     private Boolean estaActivo;
     
-    @ManyToOne
-    @JoinColumn(name = "usuario_id")
-    private Usuario usuario;
-
+    // RELACIÓN: Mensaje pertenece a 1 Producto
     @ManyToOne
     @JoinColumn(name = "producto_id")
     private Producto producto;
+
+    // RELACIÓN: Mensaje lo escribe 1 Usuario
+    @ManyToOne
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
     
     public Mensaje() {
         super();
         this.estaActivo = true;
         this.fechaCreacion = LocalDateTime.now();
     }
-
-    public LocalDateTime getFechaCreacion() {
-        return fechaCreacion;
-    }
-
-    public void setFechaCreacion(LocalDateTime fechaCreacion) {
-        this.fechaCreacion = fechaCreacion;
-    }
-
-    public boolean isEstaActivo() {
-        return estaActivo;
-    }
-
-    public void setEstaActivo(boolean estaActivo) {
-        this.estaActivo = estaActivo;
-    }
-
-    public Usuario getUsuario() {
-        return usuario;
-    }
-
-    public void setUsuario(Usuario usuario) {
+    
+    public Mensaje(String texto, Usuario usuario, Producto producto) {
+        super();
+        this.texto = texto;
         this.usuario = usuario;
-    }
-
-    public Producto getProducto() {
-        return producto;
-    }
-
-    public void setProducto(Producto producto) {
         this.producto = producto;
+        this.estaActivo = true;
+        this.fechaCreacion = LocalDateTime.now();
     }
+
+    public String getTexto() { return texto; }
+    public void setTexto(String texto) { this.texto = texto; }
+
+    public LocalDateTime getFechaCreacion() { return fechaCreacion; }
+    public void setFechaCreacion(LocalDateTime fechaCreacion) { this.fechaCreacion = fechaCreacion; }
+
+    public Boolean getEstaActivo() { return estaActivo; }
+    public void setEstaActivo(Boolean estaActivo) { this.estaActivo = estaActivo; }
+
+    public Producto getProducto() { return producto; }
+    public void setProducto(Producto producto) { this.producto = producto; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 }

@@ -11,6 +11,7 @@ import com.nexus.entity.Mensaje;
 import com.nexus.entity.Producto;
 import com.nexus.entity.Usuario;
 import com.nexus.repository.MensajeRepository;
+import org.springframework.data.domain.Sort;
 
 @Service
 public class MensajeService {
@@ -24,45 +25,47 @@ public class MensajeService {
     @Autowired
     private ProductoService productoService;
 
-    // Obtener todos los mensajes (Admin)
+    // Obtener todos
     public List<Mensaje> findAll() {
         return mensajeRepository.findAll();
     }
 
-    // Buscar mensaje por ID
+    // Buscar por ID
     public Optional<Mensaje> findById(Integer id) {
         return mensajeRepository.findById(id);
     }
 
-    // Obtener mensajes de un producto (Chat) ordenados por los más recientes
+    // MEJORA: Obtener chat por producto ORDENADO por fecha ASC (Estilo WhatsApp)
     public List<Mensaje> findByProductoId(Integer productoId) {
-        return mensajeRepository.findByProductoIdOrderByFechaCreacionDesc(productoId);
+
+        Producto p = new Producto(); 
+        p.setId(productoId);
+        return mensajeRepository.findByProducto(p); // Ordenado por defecto o añadir Sort en repository
     }
 
-    // Guardar/Enviar un nuevo mensaje
+    // Enviar mensaje
     public Mensaje save(Mensaje mensaje, Integer usuarioId, Integer productoId) {
         Optional<Usuario> oUsuario = usuarioService.findById(usuarioId);
         Optional<Producto> oProducto = productoService.findById(productoId);
 
         if (oUsuario.isPresent() && oProducto.isPresent()) {
+            if (mensaje.getTexto() == null || mensaje.getTexto().trim().isEmpty()) {
+                throw new IllegalArgumentException("El mensaje no puede estar vacío");
+            }
+
             mensaje.setUsuario(oUsuario.get());
             mensaje.setProducto(oProducto.get());
             
-            // Aseguramos valores por defecto si no vienen
             if (mensaje.getFechaCreacion() == null) {
                 mensaje.setFechaCreacion(LocalDateTime.now());
             }
-            if (!mensaje.isEstaActivo()) {
-                mensaje.setEstaActivo(true);
-            }
+            mensaje.setEstaActivo(true);
             
             return mensajeRepository.save(mensaje);
         }
-        
-        return null; // O lanzar una excepción personalizada
+        return null;
     }
 
-    // Eliminado lógico (desactivar mensaje) o físico
     public void delete(Integer id) {
         mensajeRepository.deleteById(id);
     }

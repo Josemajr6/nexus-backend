@@ -14,11 +14,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nexus.entity.Actor;
-import com.nexus.entity.ActorLogin;
 import com.nexus.entity.Usuario;
 import com.nexus.security.JWTUtils;
 import com.nexus.service.UsuarioService;
@@ -36,11 +34,15 @@ public class ActorController {
     @Autowired
     private UsuarioService usuarioService;
 
-    // --- 1. LOGIN NORMAL ---
+    // --- 1. LOGIN NORMAL (Sin DTO, usando Map) ---
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody ActorLogin actorLogin) {
+    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> credenciales) {
         try {
-            UsernamePasswordAuthenticationToken authInputToken = new UsernamePasswordAuthenticationToken(actorLogin.getUser(), actorLogin.getPassword());
+            // Extraemos datos del Map directamente
+            String user = credenciales.get("user");
+            String password = credenciales.get("password");
+            
+            UsernamePasswordAuthenticationToken authInputToken = new UsernamePasswordAuthenticationToken(user, password);
             Authentication authentication = authenticationManager.authenticate(authInputToken);
             SecurityContextHolder.getContext().setAuthentication(authentication);
             
@@ -54,7 +56,7 @@ public class ActorController {
             
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (Exception e) {
-            return new ResponseEntity<>(Map.of("mensaje", "Credenciales inválidas"), HttpStatus.UNAUTHORIZED);
+            return new ResponseEntity<>(Map.of("mensaje", "Credenciales inválidas o error interno"), HttpStatus.UNAUTHORIZED);
         }
     }
     
@@ -64,10 +66,6 @@ public class ActorController {
         try {
             String idToken = body.get("token");
             Actor actor = usuarioService.ingresarConGoogle(idToken);
-            
-            // Generamos nuestro propio JWT para que siga funcionando igual
-            // Necesitamos 'engañar' un poco a Spring Security creando una autenticación manual
-            // para poder usar jwtUtils.generateToken, o crear un método overload en JWTUtils.
             
             UserDetails userDetails = usuarioService.loadUserByUsername(actor.getUser());
             UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
@@ -84,17 +82,16 @@ public class ActorController {
             return new ResponseEntity<>(response, HttpStatus.OK);
             
         } catch (Exception e) {
-            e.printStackTrace();
-            return new ResponseEntity<>(Map.of("mensaje", "Error validando Google: " + e.getMessage()), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(Map.of("mensaje", "Error validando Google"), HttpStatus.BAD_REQUEST);
         }
     }
     
-    // --- 3. REGISTRO USUARIO (Envía correo) ---
+    // --- 3. REGISTRO USUARIO ---
     @PostMapping("/registro")
     public ResponseEntity<?> registrar(@RequestBody Usuario usuario) {
         try {
             Usuario nuevo = usuarioService.registrarUsuario(usuario);
-            return new ResponseEntity<>(Map.of("mensaje", "Usuario registrado. Revisa tu correo para el código.", "email", nuevo.getEmail()), HttpStatus.CREATED);
+            return new ResponseEntity<>(Map.of("mensaje", "Usuario registrado. Revisa tu correo.", "email", nuevo.getEmail()), HttpStatus.CREATED);
         } catch (Exception e) {
             return new ResponseEntity<>(Map.of("mensaje", e.getMessage()), HttpStatus.BAD_REQUEST);
         }
@@ -111,7 +108,7 @@ public class ActorController {
         if (verificado) {
             return new ResponseEntity<>(Map.of("mensaje", "Cuenta verificada correctamente"), HttpStatus.OK);
         } else {
-            return new ResponseEntity<>(Map.of("mensaje", "Código incorrecto o email no encontrado"), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(Map.of("mensaje", "Código incorrecto"), HttpStatus.BAD_REQUEST);
         }
     }
 }

@@ -1,35 +1,28 @@
 package com.nexus.entity;
 
+import jakarta.persistence.*;
+import java.util.ArrayList;
 import java.util.List;
-
-import jakarta.persistence.Entity;
-import jakarta.persistence.OneToMany;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
+@PrimaryKeyJoinColumn(name = "id")
 public class Empresa extends Actor {
-	
-	private String cif;
-	
-	@OneToMany(mappedBy = "empresa")
-	private List<Contrato> contratos;
 
-	public Empresa() {
-		super();
-	}
+    private String cif;
 
-	public String getCif() {
-		return cif;
-	}
+    // RELACIÓN: Empresa tiene 0..* Contratos
+    @OneToMany(mappedBy = "empresa", cascade = CascadeType.ALL)
+    @JsonIgnore
+    private List<Contrato> contratos = new ArrayList<>();
 
-	public void setCif(String cif) {
-		this.cif = cif;
-	}
+    public Empresa() {
+        super();
+    }
 
-	public List<Contrato> getContratos() {
-		return contratos;
-	}
+    public String getCif() { return cif; }
+    public void setCif(String cif) { this.cif = cif; }
 
-	public void setContratos(List<Contrato> contratos) {
-		this.contratos = contratos;
-	}
+    public List<Contrato> getContratos() { return contratos; }
+    public void setContratos(List<Contrato> contratos) { this.contratos = contratos; }
 }
