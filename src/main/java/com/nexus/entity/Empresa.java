@@ -6,9 +6,9 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
-@PrimaryKeyJoinColumn(name = "id")
 public class Empresa extends Actor {
 
+	
     private String cif;
 
     // RELACIÓN: Empresa tiene 0..* Contratos

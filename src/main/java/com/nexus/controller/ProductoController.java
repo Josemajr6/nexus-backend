@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.nexus.entity.Producto;
 import com.nexus.service.ProductoService;
-import com.nexus.service.StorageService; // <--- Importante
+import com.nexus.service.StorageService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +26,7 @@ public class ProductoController {
     private ProductoService productoService;
     
     @Autowired
-    private StorageService storageService; // <--- NUEVO SERVICIO
+    private StorageService storageService;
 
     @GetMapping
     @Operation(summary = "Obtener todos los productos")
@@ -54,39 +54,100 @@ public class ProductoController {
         }
     }
 
-    // --- MODIFICADO: PUBLICAR CON FOTO ---
+    // ✅ CORREGIDO: Publicar con imagen principal + galería
     @PostMapping(value = "/publicar/{usuarioId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Publicar un nuevo producto con foto (Multipart)")
+    @Operation(summary = "Publicar un nuevo producto con imagen principal y galería opcional")
     public ResponseEntity<Object> publicar(
-            @RequestPart("producto") Producto producto, // Cambiado @RequestBody por @RequestPart para mezclar JSON y File
-            @RequestPart(value = "file", required = false) MultipartFile file, // Archivo opcional
+            @RequestPart("producto") Producto producto,
+            @RequestPart("imagenPrincipal") MultipartFile imagenPrincipal, // ✅ Obligatorio
+            @RequestPart(value = "galeria", required = false) List<MultipartFile> galeria, // ✅ Opcional
             @PathVariable Integer usuarioId) {
         
-        // 1. Si hay foto, la subimos primero
-        if (file != null && !file.isEmpty()) {
-            String urlImagen = storageService.subirImagen(file);
-            producto.setImagenUrl(urlImagen); // Asegúrate que Producto tiene setImagenUrl
-        }
-
-        // 2. Llamamos al servicio original que ya tenías
-        Producto nuevoProducto = productoService.publicar(producto, usuarioId);
-        
-        if (nuevoProducto != null) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(nuevoProducto);
-        } else {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Usuario no encontrado para vincular el producto");
+        try {
+            // 1. Subir imagen principal (OBLIGATORIA)
+            String urlPrincipal = storageService.subirImagen(imagenPrincipal);
+            if (urlPrincipal == null) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error al subir imagen principal");
+            }
+            producto.setImagenPrincipal(urlPrincipal);
+            
+            // 2. Subir galería si existe (máximo 5 imágenes)
+            if (galeria != null && !galeria.isEmpty()) {
+                for (int i = 0; i < Math.min(galeria.size(), 5); i++) {
+                    String urlGaleria = storageService.subirImagen(galeria.get(i));
+                    if (urlGaleria != null) {
+                        producto.addImagenGaleria(urlGaleria);
+                    }
+                }
+            }
+            
+            // 3. Guardar producto en BD
+            Producto nuevoProducto = productoService.publicar(producto, usuarioId);
+            
+            if (nuevoProducto != null) {
+                return ResponseEntity.status(HttpStatus.CREATED).body(nuevoProducto);
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Usuario no encontrado para vincular el producto");
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
         }
     }
 
-    @PutMapping("/{id}")
-    @Operation(summary = "Actualizar producto")
-    public ResponseEntity<Object> update(@PathVariable Integer id, @RequestBody Producto producto) {
-        Producto productoActualizado = productoService.update(id, producto);
+    // ✅ NUEVO: Actualizar producto con nuevas imágenes
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Actualizar producto (puede incluir nuevas imágenes)")
+    public ResponseEntity<Object> update(
+            @PathVariable Integer id,
+            @RequestPart("producto") Producto productoDetalles,
+            @RequestPart(value = "imagenPrincipal", required = false) MultipartFile imagenPrincipal,
+            @RequestPart(value = "galeria", required = false) List<MultipartFile> galeria) {
         
-        if (productoActualizado != null) {
-            return ResponseEntity.ok(productoActualizado);
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Producto no encontrado");
+        try {
+            Optional<Producto> oProducto = productoService.findById(id);
+            if (oProducto.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Producto no encontrado");
+            }
+            
+            Producto producto = oProducto.get();
+            
+            // Actualizar campos básicos
+            producto.setTitulo(productoDetalles.getTitulo());
+            producto.setDescripcion(productoDetalles.getDescripcion());
+            producto.setPrecio(productoDetalles.getPrecio());
+            producto.setTipoOferta(productoDetalles.getTipoOferta());
+            
+            // Si hay nueva imagen principal, reemplazar
+            if (imagenPrincipal != null && !imagenPrincipal.isEmpty()) {
+                String urlNueva = storageService.subirImagen(imagenPrincipal);
+                if (urlNueva != null) {
+                    // Eliminar imagen anterior de Cloudinary
+                    storageService.eliminarImagen(producto.getImagenPrincipal());
+                    producto.setImagenPrincipal(urlNueva);
+                }
+            }
+            
+            // Si hay nueva galería, añadir (no reemplazar completamente)
+            if (galeria != null && !galeria.isEmpty()) {
+                for (MultipartFile file : galeria) {
+                    if (producto.getGaleriaImagenes().size() < 5) {
+                        String urlGaleria = storageService.subirImagen(file);
+                        if (urlGaleria != null) {
+                            producto.addImagenGaleria(urlGaleria);
+                        }
+                    }
+                }
+            }
+            
+            Producto actualizado = productoService.update(id, producto);
+            return ResponseEntity.ok(actualizado);
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error: " + e.getMessage());
         }
     }
 
@@ -96,6 +157,14 @@ public class ProductoController {
         Optional<Producto> oProducto = productoService.findById(id);
         
         if (oProducto.isPresent()) {
+            Producto producto = oProducto.get();
+            
+            // Eliminar imágenes de Cloudinary
+            storageService.eliminarImagen(producto.getImagenPrincipal());
+            for (String url : producto.getGaleriaImagenes()) {
+                storageService.eliminarImagen(url);
+            }
+            
             productoService.delete(id);
             return ResponseEntity.ok("Producto eliminado correctamente");
         } else {

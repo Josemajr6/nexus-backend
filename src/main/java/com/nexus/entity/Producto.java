@@ -15,12 +15,22 @@ public class Producto extends DomainEntity {
     private String titulo;
 
     @NotBlank
+    @Column(columnDefinition = "TEXT")
     private String descripcion;
 
     @Min(0)
     private double precio;
     
-    private String imagenUrl; // FOTO DEL PRODUCTO
+    // ✅ NUEVO: Imagen principal OBLIGATORIA
+    @NotBlank
+    @Column(columnDefinition = "TEXT")
+    private String imagenPrincipal;
+    
+    // ✅ NUEVO: Galería de imágenes OPCIONAL (máximo 5 fotos extra)
+    @ElementCollection
+    @CollectionTable(name = "producto_galeria", joinColumns = @JoinColumn(name = "producto_id"))
+    @Column(name = "imagen_url", columnDefinition = "TEXT")
+    private List<String> galeriaImagenes = new ArrayList<>();
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -43,15 +53,15 @@ public class Producto extends DomainEntity {
         this.estadoProducto = EstadoProducto.DISPONIBLE; 
     }
 
-    // CONSTRUCTOR COMPLETO (Usado ahora por PopulateDB)
-    public Producto(String titulo, String descripcion, double precio, TipoOferta tipoOferta, Usuario publicador, String imagenUrl) {
+    // CONSTRUCTOR COMPLETO
+    public Producto(String titulo, String descripcion, double precio, TipoOferta tipoOferta, Usuario publicador, String imagenPrincipal) {
         super();
         this.titulo = titulo;
         this.descripcion = descripcion;
         this.precio = precio;
         this.tipoOferta = tipoOferta;
         this.publicador = publicador;
-        this.imagenUrl = imagenUrl;
+        this.imagenPrincipal = imagenPrincipal;
         this.estadoProducto = EstadoProducto.DISPONIBLE;
     }
 
@@ -65,6 +75,15 @@ public class Producto extends DomainEntity {
         mensaje.setProducto(null);
     }
 
+    // ✅ NUEVO: Método para añadir imágenes a la galería con validación
+    public void addImagenGaleria(String url) {
+        if (galeriaImagenes.size() < 5) { // Máximo 5 imágenes extra
+            galeriaImagenes.add(url);
+        } else {
+            throw new IllegalStateException("Máximo 5 imágenes en la galería");
+        }
+    }
+
     // Getters y Setters
     public String getTitulo() { return titulo; }
     public void setTitulo(String titulo) { this.titulo = titulo; }
@@ -75,8 +94,11 @@ public class Producto extends DomainEntity {
     public double getPrecio() { return precio; }
     public void setPrecio(double precio) { this.precio = precio; }
 
-    public String getImagenUrl() { return imagenUrl; }
-    public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
+    public String getImagenPrincipal() { return imagenPrincipal; }
+    public void setImagenPrincipal(String imagenPrincipal) { this.imagenPrincipal = imagenPrincipal; }
+
+    public List<String> getGaleriaImagenes() { return galeriaImagenes; }
+    public void setGaleriaImagenes(List<String> galeriaImagenes) { this.galeriaImagenes = galeriaImagenes; }
 
     public TipoOferta getTipoOferta() { return tipoOferta; }
     public void setTipoOferta(TipoOferta tipoOferta) { this.tipoOferta = tipoOferta; }

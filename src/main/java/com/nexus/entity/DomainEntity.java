@@ -10,7 +10,7 @@ import jakarta.persistence.Version;
 @MappedSuperclass 
 public class DomainEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE) // ✅ CORREGIDO: Mejor para TABLE_PER_CLASS
     private int id;
     
     @Version

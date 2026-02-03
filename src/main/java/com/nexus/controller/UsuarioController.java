@@ -25,16 +25,14 @@ public class UsuarioController {
     private UsuarioService usuarioService;
     
     @Autowired
-    private StorageService storageService; // <--- NUEVO SERVICIO
+    private StorageService storageService;
     
-    // Obtener todos los usuarios
     @GetMapping
     @Operation(summary = "Obtener todos los usuarios")
     public List<Usuario> getAllUsuarios() {
         return usuarioService.findAll();
     }
     
-    // Obtener usuario por id
     @GetMapping("/{id}")
     @Operation(summary = "Obtener usuario por id")
     public ResponseEntity<Usuario> getUsuarioById(@PathVariable Integer id) {
@@ -47,7 +45,6 @@ public class UsuarioController {
         }
     }
     
-    // Crear usuario (Registro manual administrativo)
     @PostMapping
     @Operation(summary = "Crear usuario")
     public ResponseEntity<Usuario> createUsuario(@RequestBody Usuario usuario) {
@@ -55,15 +52,19 @@ public class UsuarioController {
         return ResponseEntity.ok(nuevoUsuario);
     }
     
-    // --- NUEVO ENDPOINT: SUBIR AVATAR ---
+    // ✅ CORREGIDO: Subir avatar con mejor manejo de errores
     @PostMapping(value = "/{id}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Subir foto de perfil (Avatar)")
+    @Operation(summary = "Subir o actualizar avatar del usuario")
     public ResponseEntity<?> subirAvatar(@PathVariable Integer id, @RequestParam("file") MultipartFile file) {
         Optional<Usuario> usuarioOptional = usuarioService.findById(id);
         
-        if (usuarioOptional.isPresent()) {
-            Usuario usuario = usuarioOptional.get();
-            
+        if (usuarioOptional.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        Usuario usuario = usuarioOptional.get();
+        
+        try {
             // Subir a Cloudinary
             String url = storageService.subirImagen(file);
             
@@ -72,17 +73,23 @@ public class UsuarioController {
                         .body(Map.of("error", "Fallo al subir la imagen. Revisa configuración de Cloudinary."));
             }
             
-            // Guardar URL en BD
-            usuario.setFotoPerfil(url); // Asegúrate de que en Usuario.java el campo se llame 'fotoPerfil'
+            // Eliminar avatar anterior si no es el por defecto
+            if (!usuario.getAvatar().contains("avatar-default")) {
+                storageService.eliminarImagen(usuario.getAvatar());
+            }
+            
+            // Guardar nueva URL en BD
+            usuario.setAvatar(url);
             usuarioService.save(usuario);
             
             return ResponseEntity.ok(Map.of("mensaje", "Avatar actualizado", "url", url));
-        } else {
-            return ResponseEntity.notFound().build();
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al procesar la imagen: " + e.getMessage()));
         }
     }
     
-    // Actualizar usuario
     @PutMapping("/{id}")
     @Operation(summary = "Actualizar usuario")
     public ResponseEntity<Usuario> updateUsuario(@PathVariable Integer id, @RequestBody Usuario usuarioDetalles) {
@@ -92,7 +99,9 @@ public class UsuarioController {
             Usuario usuarioExistente = usuarioOptional.get();
             usuarioExistente.setUser(usuarioDetalles.getUser());
             usuarioExistente.setEmail(usuarioDetalles.getEmail());
-            // Puedes añadir más campos aquí si es necesario
+            usuarioExistente.setTelefono(usuarioDetalles.getTelefono());
+            usuarioExistente.setBiografia(usuarioDetalles.getBiografia());
+            usuarioExistente.setUbicacion(usuarioDetalles.getUbicacion());
             
             Usuario usuarioActualizado = usuarioService.save(usuarioExistente);
             return ResponseEntity.ok(usuarioActualizado);
@@ -101,15 +110,21 @@ public class UsuarioController {
         }
     }
     
-    // Eliminar usuario
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar usuario por id")
     public ResponseEntity<String> deleteUsuario(@PathVariable Integer id) {
         Optional<Usuario> usuarioOptional = usuarioService.findById(id);
         
         if (usuarioOptional.isPresent()) {
+            Usuario usuario = usuarioOptional.get();
+            
+            // Eliminar avatar de Cloudinary si no es el por defecto
+            if (!usuario.getAvatar().contains("avatar-default")) {
+                storageService.eliminarImagen(usuario.getAvatar());
+            }
+            
             usuarioService.delete(id);
-            return ResponseEntity.ok("Usuario eliminado correctamente...");
+            return ResponseEntity.ok("Usuario eliminado correctamente");
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No se ha encontrado el usuario para eliminar");
         }

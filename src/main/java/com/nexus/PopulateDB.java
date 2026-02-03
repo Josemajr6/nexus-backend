@@ -64,7 +64,7 @@ public class PopulateDB {
         maria.setEsVerificado(true);
         maria.setReputacion(5);
         maria.setBiografia("Fan de la tecnología");
-        maria.setFotoPerfil("https://i.pravatar.cc/150?u=alice"); // Foto placeholder
+        maria.setAvatar("https://i.pravatar.cc/150?u=alice"); // ✅ CORREGIDO
         maria = usuarioRepository.save(maria);
         
         Usuario pepe = new Usuario();
@@ -84,9 +84,9 @@ public class PopulateDB {
         ecentia.setCif("B12345678");
         ecentia = empresaRepository.save(ecentia);
 
-        System.out.println("✅ Actores creados (MariaPepa, Bob y Ecentia).");
+        System.out.println("✅ Actores creados (Admin, MariaPepa, Pepe y Ecentia).");
 
-        // --- 2. PRODUCTOS (De Maria Pepa) ---
+        // --- 2. PRODUCTOS (Con imagen principal) ---
         Producto p1 = new Producto("iPhone 13", "Como nuevo", 600.0, TipoOferta.VENTA, maria, "https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5");
         Producto p2 = new Producto("PS5", "Con 2 mandos", 450.0, TipoOferta.VENTA, maria, "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3");
         productoRepository.saveAll(List.of(p1, p2));
@@ -105,22 +105,22 @@ public class PopulateDB {
         contratoRepository.save(c1);
         System.out.println("✅ Contratos creados.");
 
-        // --- 5. OFERTAS Y COMENTARIOS ---
+        // --- 5. OFERTAS Y COMENTARIOS (Con imagen principal) ---
         Oferta off1 = new Oferta();
-        off1.setActor(ecentia); // Publicada por Ecentia
-        // CAMPOS NUEVOS OBLIGATORIOS:
+        off1.setActor(ecentia);
         off1.setTitulo("Rebajas de Primavera");
         off1.setDescripcion("Descuentos exclusivos en nuestra web.");
         off1.setTienda("Ecentia Store");
-        off1.setUrlOferta("https://ecentia.es/promo"); // Simulamos foto banner
+        off1.setImagenPrincipal("https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da"); // ✅ CORREGIDO
         off1.setPrecioOriginal(100.0);
         off1.setPrecioOferta(80.0);
         off1.setFechaExpiracion(LocalDateTime.now().plusDays(10));
         off1 = ofertaRepository.save(off1);
         
-        Comentario com1 = new Comentario("Gran oferta!", off1, maria); // Maria comenta
+        Comentario com1 = new Comentario("Gran oferta!", off1, maria);
         comentarioRepository.save(com1);
         
         System.out.println("✅ Ofertas y Comentarios creados.");
+        System.out.println("🎉 Base de datos poblada exitosamente.");
     }
 }

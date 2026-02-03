@@ -10,7 +10,7 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
-@Inheritance(strategy = InheritanceType.JOINED) // Usamos JOINED para reflejar las cajas separadas del UML
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) // ✅ CORREGIDO: Evita problemas de FK
 public abstract class Actor extends DomainEntity {
 
     @NotBlank

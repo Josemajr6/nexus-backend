@@ -6,15 +6,16 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
-@PrimaryKeyJoinColumn(name = "id")
 public class Usuario extends Actor {
 
     private String telefono;
     
-    // CAMBIO: De Boolean (objeto) a boolean (primitivo)
     private boolean esVerificado; 
     
-    private String fotoPerfil;
+    // ✅ NUEVO: Avatar con valor por defecto
+    @Column(columnDefinition = "TEXT")
+    private String avatar = "https://res.cloudinary.com/dzahpgslo/image/upload/v1234567890/defaults/avatar-default.png";
+    
     private String biografia;
     private Integer reputacion;
     private String ubicacion;
@@ -41,12 +42,12 @@ public class Usuario extends Actor {
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
 
-    // CORREGIDO: Ahora sí existe isEsVerificado()
     public boolean isEsVerificado() { return esVerificado; }
     public void setEsVerificado(boolean esVerificado) { this.esVerificado = esVerificado; }
 
-    public String getFotoPerfil() { return fotoPerfil; }
-    public void setFotoPerfil(String fotoPerfil) { this.fotoPerfil = fotoPerfil; }
+    // ✅ NUEVO: Getters/Setters para avatar
+    public String getAvatar() { return avatar; }
+    public void setAvatar(String avatar) { this.avatar = avatar != null ? avatar : "https://res.cloudinary.com/dzahpgslo/image/upload/v1234567890/defaults/avatar-default.png"; }
 
     public String getBiografia() { return biografia; }
     public void setBiografia(String biografia) { this.biografia = biografia; }

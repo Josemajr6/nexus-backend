@@ -121,8 +121,8 @@ public class UsuarioService implements UserDetailsService {
                 nuevo.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
                 nuevo.setFechaRegistro(LocalDateTime.now());
                 
-                // CAMBIO AQUÍ: setFotoPerfil en lugar de setAvatarUrl
-                nuevo.setFotoPerfil(pictureUrl);
+                // ✅ CORREGIDO: Ahora usa setAvatar
+                nuevo.setAvatar(pictureUrl);
                 
                 nuevo.setEsVerificado(true); 
                 nuevo.setTelefono("Pendiente"); 
