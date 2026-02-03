@@ -93,7 +93,7 @@ public class PopulateDB {
         System.out.println("✅ Productos creados.");
 
         // --- 3. MENSAJES ---
-        Mensaje m1 = new Mensaje("Hola, ¿sigue disponible?", bobpepe, p1);
+        Mensaje m1 = new Mensaje("Hola, ¿sigue disponible?", pepe, p1);
         Mensaje m2 = new Mensaje("Sí, claro. ¿Te interesa?", maria, p1);
         mensajeRepository.saveAll(List.of(m1, m2));
         System.out.println("✅ Mensajes creados.");
