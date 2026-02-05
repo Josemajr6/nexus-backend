@@ -1,0 +1,11 @@
+package com.nexus.entity;
+
+public enum TipoNotificacion {
+    NUEVO_MENSAJE,
+    OFERTA_EXPIRA_PRONTO,
+    BAJADA_PRECIO,
+    RESPUESTA_COMENTARIO,
+    PRODUCTO_VENDIDO,
+    OFERTA_DESTACADA,
+    SPARK_MILESTONE
+}

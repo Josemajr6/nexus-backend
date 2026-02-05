@@ -53,7 +53,7 @@ public class UsuarioService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        Actor actor = actorRepository.findByUser(username)
+        Actor actor = actorRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
         
         if (actor instanceof Usuario && !((Usuario) actor).isEsVerificado()) {

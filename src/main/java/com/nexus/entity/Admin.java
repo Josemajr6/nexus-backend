@@ -13,7 +13,7 @@ public class Admin extends Actor { // <--- CAMBIO: Extends Actor
 
     public Admin(String user, String email, String password, int nivelAcceso) {
         super();
-        this.user = user;
+        this.username = user;
         this.email = email;
         this.password = password;
         this.nivelAcceso = nivelAcceso;

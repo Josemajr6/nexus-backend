@@ -10,7 +10,7 @@ import com.nexus.entity.Actor;
 @Repository
 public interface ActorRepository extends JpaRepository<Actor, Integer>{
 
-	Optional<Actor> findByUser(String user);
+	Optional<Actor> findByUsername(String username);
     Optional<Actor> findByEmail(String email);
 	
 }

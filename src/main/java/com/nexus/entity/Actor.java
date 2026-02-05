@@ -15,7 +15,7 @@ public abstract class Actor extends DomainEntity {
 
     @NotBlank
     @Column(unique = true)
-    protected String user;
+    protected String username;
 
     @Email
     @NotBlank
@@ -47,8 +47,8 @@ public abstract class Actor extends DomainEntity {
     }
 
     // Getters y Setters
-    public String getUser() { return user; }
-    public void setUser(String user) { this.user = user; }
+    public String getUser() { return username; }
+    public void setUser(String user) { this.username = user; }
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }

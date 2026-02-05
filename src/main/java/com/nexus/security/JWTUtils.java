@@ -94,7 +94,7 @@ public class JWTUtils {
             return null;
         }
         
-        Optional<Actor> actorO = actorRepository.findByUser(username);
+        Optional<Actor> actorO = actorRepository.findByUsername(username);
         
         if (!actorO.isPresent()) {
             return null;

@@ -1,0 +1,23 @@
+package com.nexus.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import com.nexus.entity.Favorito;
+
+@Repository
+public interface FavoritoRepository extends JpaRepository<Favorito, Integer> {
+    
+    @Query("SELECT f FROM Favorito f WHERE f.usuario.id = ?1 ORDER BY f.fechaGuardado DESC")
+    List<Favorito> findByUsuarioId(Integer usuarioId);
+    
+    @Query("SELECT f FROM Favorito f WHERE f.usuario.id = ?1 AND f.oferta.id = ?2")
+    Optional<Favorito> findByUsuarioAndOferta(Integer usuarioId, Integer ofertaId);
+    
+    @Query("SELECT f FROM Favorito f WHERE f.usuario.id = ?1 AND f.producto.id = ?2")
+    Optional<Favorito> findByUsuarioAndProducto(Integer usuarioId, Integer productoId);
+}

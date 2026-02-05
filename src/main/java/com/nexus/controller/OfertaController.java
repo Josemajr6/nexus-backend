@@ -1,19 +1,26 @@
 package com.nexus.controller;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.nexus.dto.FiltroOfertaDTO;
 import com.nexus.entity.Actor;
+import com.nexus.entity.BadgeOferta;
 import com.nexus.entity.Oferta;
 import com.nexus.repository.ActorRepository;
-import com.nexus.repository.OfertaRepository;
+import com.nexus.service.OfertaService;
 import com.nexus.service.StorageService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,53 +28,150 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/oferta")
-@Tag(name = "Ofertas", description = "Gestión de chollos y promociones")
+@Tag(name = "Ofertas", description = "Sistema de chollos con Spark")
 public class OfertaController {
 
-    @Autowired private OfertaRepository ofertaRepository;
+    @Autowired private OfertaService ofertaService;
     @Autowired private ActorRepository actorRepository;
     @Autowired private StorageService storageService;
 
+    // --- LISTAR TODAS ---
     @GetMapping
-    @Operation(summary = "Listar todas las ofertas")
-    public List<Oferta> listar() { 
-        return ofertaRepository.findAll(); 
+    @Operation(summary = "Listar todas las ofertas activas")
+    public ResponseEntity<List<Oferta>> listar() {
+        return ResponseEntity.ok(ofertaService.findAll());
     }
     
+    // --- VER DETALLE (Incrementa vistas) ---
     @GetMapping("/{id}")
-    @Operation(summary = "Ver detalle de una oferta")
+    @Operation(summary = "Ver detalle de oferta")
     public ResponseEntity<Oferta> verOferta(@PathVariable Integer id) {
-        return ofertaRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        Optional<Oferta> oferta = ofertaService.findById(id);
+        if (oferta.isPresent()) {
+            ofertaService.incrementarVistas(id);
+            return ResponseEntity.ok(oferta.get());
+        }
+        return ResponseEntity.notFound().build();
     }
     
-    // ✅ CORREGIDO: Crear oferta con imagen principal + galería
+    // --- BUSCAR CON FILTROS ---
+    @PostMapping("/filtrar")
+    @Operation(summary = "Búsqueda avanzada con filtros")
+    public ResponseEntity<Map<String, Object>> filtrar(@RequestBody FiltroOfertaDTO filtro) {
+        try {
+            Sort sort = crearOrdenamiento(filtro.getOrdenarPor(), filtro.getOrden());
+            Pageable pageable = PageRequest.of(filtro.getPagina(), filtro.getElementosPorPagina(), sort);
+            
+            Page<Oferta> paginaOfertas = ofertaService.buscarConFiltros(filtro, pageable);
+            
+            return ResponseEntity.ok(Map.of(
+                "ofertas", paginaOfertas.getContent(),
+                "paginaActual", paginaOfertas.getNumber(),
+                "totalPaginas", paginaOfertas.getTotalPages(),
+                "totalElementos", paginaOfertas.getTotalElements()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    // --- OFERTAS DESTACADAS ---
+    @GetMapping("/destacadas")
+    @Operation(summary = "Ofertas destacadas (Spark + Descuento + Reciente)")
+    public ResponseEntity<List<Oferta>> destacadas() {
+        return ResponseEntity.ok(ofertaService.obtenerDestacadas());
+    }
+    
+    // --- TRENDING ---
+    @GetMapping("/trending")
+    @Operation(summary = "Trending en las últimas 24 horas")
+    public ResponseEntity<List<Oferta>> trending() {
+        return ResponseEntity.ok(ofertaService.obtenerTrending());
+    }
+    
+    // --- TOP SPARK ---
+    @GetMapping("/top-spark")
+    @Operation(summary = "Ofertas con mejor Spark Score")
+    public ResponseEntity<List<Oferta>> topSpark() {
+        return ResponseEntity.ok(ofertaService.obtenerTopSpark());
+    }
+    
+    // --- EXPIRAN PRONTO ---
+    @GetMapping("/expiran-pronto")
+    @Operation(summary = "Ofertas que expiran en 24 horas")
+    public ResponseEntity<List<Oferta>> expiranProx() {
+        return ResponseEntity.ok(ofertaService.obtenerProximasExpirar());
+    }
+    
+    // --- POR BADGE ---
+    @GetMapping("/badge/{badge}")
+    @Operation(summary = "Filtrar por badge")
+    public ResponseEntity<List<Oferta>> porBadge(@PathVariable BadgeOferta badge) {
+        // Implementar en repository
+        return ResponseEntity.ok(List.of());
+    }
+    
+    // --- ⚡ VOTAR (SPARK / DRIP) ---
+    @PostMapping("/{id}/votar")
+    @Operation(summary = "Dar Spark (⚡) o Drip (💧) a una oferta")
+    public ResponseEntity<?> votar(
+            @PathVariable Integer id, 
+            @RequestParam Integer usuarioId,
+            @RequestParam Boolean esSpark) {
+        
+        try {
+            ofertaService.votarOferta(id, usuarioId, esSpark);
+            
+            Optional<Oferta> oferta = ofertaService.findById(id);
+            if (oferta.isPresent()) {
+                return ResponseEntity.ok(Map.of(
+                    "mensaje", esSpark ? "⚡ Spark dado" : "💧 Drip dado",
+                    "sparkScore", oferta.get().getSparkScore(),
+                    "badge", oferta.get().getBadge()
+                ));
+            }
+            return ResponseEntity.ok(Map.of("mensaje", "Voto registrado"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    // --- COMPARTIR (Incrementa contador) ---
+    @PostMapping("/{id}/compartir")
+    @Operation(summary = "Registrar que se compartió la oferta")
+    public ResponseEntity<?> compartir(@PathVariable Integer id) {
+        ofertaService.incrementarCompartidos(id);
+        return ResponseEntity.ok(Map.of("mensaje", "Compartido registrado"));
+    }
+    
+    // --- CREAR OFERTA ---
     @PostMapping(value = "/{actorId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Publicar una oferta con imagen principal y galería opcional")
-    public ResponseEntity<?> crearOferta(
+    @Operation(summary = "Publicar oferta con imágenes")
+    public ResponseEntity<?> crear(
             @PathVariable Integer actorId,
             @RequestPart("oferta") Oferta oferta,
-            @RequestPart("imagenPrincipal") MultipartFile imagenPrincipal, // ✅ Obligatorio
+            @RequestPart("imagenPrincipal") MultipartFile imagenPrincipal,
             @RequestPart(value = "galeria", required = false) List<MultipartFile> galeria) {
         
         try {
             Optional<Actor> actor = actorRepository.findById(actorId);
             if (actor.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Actor no encontrado");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Actor no encontrado"));
             }
             
             oferta.setActor(actor.get());
             
-            // 1. Subir imagen principal (OBLIGATORIA)
+            // Subir imagen principal
             String urlPrincipal = storageService.subirImagen(imagenPrincipal);
             if (urlPrincipal == null) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("Error al subir imagen principal");
+                    .body(Map.of("error", "Error al subir imagen principal"));
             }
             oferta.setImagenPrincipal(urlPrincipal);
             
-            // 2. Subir galería si existe (máximo 4 imágenes)
+            // Subir galería (máx 4)
             if (galeria != null && !galeria.isEmpty()) {
                 for (int i = 0; i < Math.min(galeria.size(), 4); i++) {
                     String urlGaleria = storageService.subirImagen(galeria.get(i));
@@ -77,34 +181,36 @@ public class OfertaController {
                 }
             }
             
-            return new ResponseEntity<>(ofertaRepository.save(oferta), HttpStatus.CREATED);
+            Oferta guardada = ofertaService.save(oferta);
+            return ResponseEntity.status(HttpStatus.CREATED).body(guardada);
             
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error: " + e.getMessage());
+                .body(Map.of("error", e.getMessage()));
         }
     }
     
-    // ✅ CORREGIDO: Actualizar oferta con nuevas imágenes
+    // --- ACTUALIZAR ---
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Actualizar oferta (puede incluir nuevas imágenes)")
-    public ResponseEntity<?> actualizarOferta(
+    @Operation(summary = "Actualizar oferta")
+    public ResponseEntity<?> actualizar(
             @PathVariable Integer id,
             @RequestPart("oferta") Oferta nuevosDatos,
             @RequestPart(value = "imagenPrincipal", required = false) MultipartFile imagenPrincipal,
             @RequestPart(value = "galeria", required = false) List<MultipartFile> galeria) {
-            
+        
         try {
-            return ofertaRepository.findById(id).map(oferta -> {
-                // Actualizar campos básicos
+            return ofertaService.findById(id).map(oferta -> {
                 if (nuevosDatos.getTitulo() != null) oferta.setTitulo(nuevosDatos.getTitulo());
                 if (nuevosDatos.getDescripcion() != null) oferta.setDescripcion(nuevosDatos.getDescripcion());
                 if (nuevosDatos.getTienda() != null) oferta.setTienda(nuevosDatos.getTienda());
-                if (nuevosDatos.getPrecioOriginal() > 0) oferta.setPrecioOriginal(nuevosDatos.getPrecioOriginal());
-                if (nuevosDatos.getPrecioOferta() > 0) oferta.setPrecioOferta(nuevosDatos.getPrecioOferta());
+                if (nuevosDatos.getPrecioOriginal() != null) oferta.setPrecioOriginal(nuevosDatos.getPrecioOriginal());
+                if (nuevosDatos.getPrecioOferta() != null) oferta.setPrecioOferta(nuevosDatos.getPrecioOferta());
+                if (nuevosDatos.getUrlOferta() != null) oferta.setUrlOferta(nuevosDatos.getUrlOferta());
                 if (nuevosDatos.getFechaExpiracion() != null) oferta.setFechaExpiracion(nuevosDatos.getFechaExpiracion());
+                if (nuevosDatos.getCategoria() != null) oferta.setCategoria(nuevosDatos.getCategoria());
                 
-                // Si hay nueva imagen principal, reemplazar
+                // Imagen principal nueva
                 if (imagenPrincipal != null && !imagenPrincipal.isEmpty()) {
                     String urlNueva = storageService.subirImagen(imagenPrincipal);
                     if (urlNueva != null) {
@@ -113,7 +219,7 @@ public class OfertaController {
                     }
                 }
                 
-                // Si hay nueva galería, añadir
+                // Galería nueva
                 if (galeria != null && !galeria.isEmpty()) {
                     for (MultipartFile file : galeria) {
                         if (oferta.getGaleriaImagenes().size() < 4) {
@@ -125,30 +231,44 @@ public class OfertaController {
                     }
                 }
                 
-                return ResponseEntity.ok(ofertaRepository.save(oferta));
+                return ResponseEntity.ok(ofertaService.save(oferta));
             }).orElse(ResponseEntity.notFound().build());
             
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error: " + e.getMessage());
+                .body(Map.of("error", e.getMessage()));
         }
     }
     
+    // --- ELIMINAR ---
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar oferta")
     public ResponseEntity<?> borrar(@PathVariable Integer id) {
-        if (ofertaRepository.existsById(id)) {
-            Oferta oferta = ofertaRepository.findById(id).get();
+        Optional<Oferta> oferta = ofertaService.findById(id);
+        if (oferta.isPresent()) {
+            Oferta o = oferta.get();
             
-            // Eliminar imágenes de Cloudinary
-            storageService.eliminarImagen(oferta.getImagenPrincipal());
-            for (String url : oferta.getGaleriaImagenes()) {
+            // Eliminar imágenes
+            storageService.eliminarImagen(o.getImagenPrincipal());
+            for (String url : o.getGaleriaImagenes()) {
                 storageService.eliminarImagen(url);
             }
             
-            ofertaRepository.deleteById(id);
-            return ResponseEntity.ok("Oferta eliminada correctamente");
+            ofertaService.deleteById(id);
+            return ResponseEntity.ok(Map.of("mensaje", "Oferta eliminada"));
         }
         return ResponseEntity.notFound().build();
+    }
+    
+    // --- MÉTODO AUXILIAR ---
+    private Sort crearOrdenamiento(String campo, String direccion) {
+        Sort.Direction dir = "asc".equalsIgnoreCase(direccion) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        
+        return switch (campo) {
+            case "precio" -> Sort.by(dir, "precioOferta");
+            case "spark" -> Sort.by(dir, "sparkCount");
+            case "popularidad" -> Sort.by(dir, "sparkCount"); // Se calcula en memoria
+            default -> Sort.by(dir, "fechaPublicacion");
+        };
     }
 }
