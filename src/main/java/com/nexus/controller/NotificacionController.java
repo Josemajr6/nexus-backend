@@ -4,60 +4,53 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.nexus.entity.Favorito;
-import com.nexus.service.FavoritoService;
+import com.nexus.entity.Notificacion;
+import com.nexus.service.NotificacionService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
-@RequestMapping("/favorito")
-@Tag(name = "Favoritos", description = "Gestión de favoritos del usuario")
-public class FavoritoController {
+@RequestMapping("/notificacion")
+@Tag(name = "Notificaciones", description = "Gestión de notificaciones del usuario")
+public class NotificacionController {
 
     @Autowired
-    private FavoritoService favoritoService;
+    private NotificacionService notificacionService;
 
     @GetMapping("/usuario/{usuarioId}")
-    @Operation(summary = "Ver favoritos de un usuario")
-    public ResponseEntity<List<Favorito>> listar(@PathVariable Integer usuarioId) {
-        return ResponseEntity.ok(favoritoService.obtenerPorUsuario(usuarioId));
+    @Operation(summary = "Ver todas las notificaciones de un usuario")
+    public ResponseEntity<List<Notificacion>> listar(@PathVariable Integer usuarioId) {
+        return ResponseEntity.ok(notificacionService.obtenerPorUsuario(usuarioId));
     }
     
-    @PostMapping("/oferta")
-    @Operation(summary = "Guardar oferta como favorita")
-    public ResponseEntity<?> guardarOferta(
-            @RequestParam Integer usuarioId,
-            @RequestParam Integer ofertaId) {
-        try {
-            Favorito favorito = favoritoService.guardarOferta(usuarioId, ofertaId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(favorito);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    @GetMapping("/usuario/{usuarioId}/no-leidas")
+    @Operation(summary = "Ver notificaciones no leídas")
+    public ResponseEntity<List<Notificacion>> noLeidas(@PathVariable Integer usuarioId) {
+        return ResponseEntity.ok(notificacionService.obtenerNoLeidas(usuarioId));
     }
     
-    @PostMapping("/producto")
-    @Operation(summary = "Guardar producto como favorito")
-    public ResponseEntity<?> guardarProducto(
-            @RequestParam Integer usuarioId,
-            @RequestParam Integer productoId) {
-        try {
-            Favorito favorito = favoritoService.guardarProducto(usuarioId, productoId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(favorito);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    @GetMapping("/usuario/{usuarioId}/contador")
+    @Operation(summary = "Contar notificaciones no leídas")
+    public ResponseEntity<Map<String, Long>> contarNoLeidas(@PathVariable Integer usuarioId) {
+        long count = notificacionService.contarNoLeidas(usuarioId);
+        return ResponseEntity.ok(Map.of("noLeidas", count));
     }
     
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Eliminar favorito")
-    public ResponseEntity<?> eliminar(@PathVariable Integer id) {
-        favoritoService.eliminar(id);
-        return ResponseEntity.ok(Map.of("mensaje", "Favorito eliminado"));
+    @PutMapping("/{id}/leer")
+    @Operation(summary = "Marcar notificación como leída")
+    public ResponseEntity<?> marcarLeida(@PathVariable Integer id) {
+        notificacionService.marcarComoLeida(id);
+        return ResponseEntity.ok(Map.of("mensaje", "Notificación marcada como leída"));
+    }
+    
+    @PutMapping("/usuario/{usuarioId}/leer-todas")
+    @Operation(summary = "Marcar todas las notificaciones como leídas")
+    public ResponseEntity<?> marcarTodasLeidas(@PathVariable Integer usuarioId) {
+        notificacionService.marcarTodasComoLeidas(usuarioId);
+        return ResponseEntity.ok(Map.of("mensaje", "Todas las notificaciones marcadas como leídas"));
     }
 }

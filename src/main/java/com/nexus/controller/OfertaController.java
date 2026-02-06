@@ -8,16 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.nexus.dto.FiltroOfertaDTO;
 import com.nexus.entity.Actor;
-import com.nexus.entity.BadgeOferta;
 import com.nexus.entity.Oferta;
 import com.nexus.repository.ActorRepository;
 import com.nexus.service.OfertaService;
@@ -54,15 +51,28 @@ public class OfertaController {
         return ResponseEntity.notFound().build();
     }
     
-    // --- BUSCAR CON FILTROS ---
-    @PostMapping("/filtrar")
+    // --- BUSCAR CON FILTROS (SIN DTO) ---
+    @GetMapping("/filtrar")
     @Operation(summary = "Búsqueda avanzada con filtros")
-    public ResponseEntity<Map<String, Object>> filtrar(@RequestBody FiltroOfertaDTO filtro) {
+    public ResponseEntity<Map<String, Object>> filtrar(
+            @RequestParam(required = false) String categoria,
+            @RequestParam(required = false) String tienda,
+            @RequestParam(required = false) Double precioMin,
+            @RequestParam(required = false) Double precioMax,
+            @RequestParam(required = false) String busqueda,
+            @RequestParam(required = false, defaultValue = "true") Boolean soloActivas,
+            @RequestParam(required = false, defaultValue = "fecha") String ordenarPor,
+            @RequestParam(required = false, defaultValue = "desc") String direccion,
+            @RequestParam(required = false, defaultValue = "0") Integer pagina,
+            @RequestParam(required = false, defaultValue = "20") Integer tamañoPagina) {
+        
         try {
-            Sort sort = crearOrdenamiento(filtro.getOrdenarPor(), filtro.getOrden());
-            Pageable pageable = PageRequest.of(filtro.getPagina(), filtro.getElementosPorPagina(), sort);
+            Pageable pageable = PageRequest.of(pagina, tamañoPagina);
             
-            Page<Oferta> paginaOfertas = ofertaService.buscarConFiltros(filtro, pageable);
+            Page<Oferta> paginaOfertas = ofertaService.buscarConFiltros(
+                categoria, tienda, precioMin, precioMax, busqueda, 
+                soloActivas, ordenarPor, direccion, pageable
+            );
             
             return ResponseEntity.ok(Map.of(
                 "ofertas", paginaOfertas.getContent(),
@@ -102,14 +112,6 @@ public class OfertaController {
     @Operation(summary = "Ofertas que expiran en 24 horas")
     public ResponseEntity<List<Oferta>> expiranProx() {
         return ResponseEntity.ok(ofertaService.obtenerProximasExpirar());
-    }
-    
-    // --- POR BADGE ---
-    @GetMapping("/badge/{badge}")
-    @Operation(summary = "Filtrar por badge")
-    public ResponseEntity<List<Oferta>> porBadge(@PathVariable BadgeOferta badge) {
-        // Implementar en repository
-        return ResponseEntity.ok(List.of());
     }
     
     // --- ⚡ VOTAR (SPARK / DRIP) ---
@@ -210,7 +212,6 @@ public class OfertaController {
                 if (nuevosDatos.getFechaExpiracion() != null) oferta.setFechaExpiracion(nuevosDatos.getFechaExpiracion());
                 if (nuevosDatos.getCategoria() != null) oferta.setCategoria(nuevosDatos.getCategoria());
                 
-                // Imagen principal nueva
                 if (imagenPrincipal != null && !imagenPrincipal.isEmpty()) {
                     String urlNueva = storageService.subirImagen(imagenPrincipal);
                     if (urlNueva != null) {
@@ -219,7 +220,6 @@ public class OfertaController {
                     }
                 }
                 
-                // Galería nueva
                 if (galeria != null && !galeria.isEmpty()) {
                     for (MultipartFile file : galeria) {
                         if (oferta.getGaleriaImagenes().size() < 4) {
@@ -248,7 +248,6 @@ public class OfertaController {
         if (oferta.isPresent()) {
             Oferta o = oferta.get();
             
-            // Eliminar imágenes
             storageService.eliminarImagen(o.getImagenPrincipal());
             for (String url : o.getGaleriaImagenes()) {
                 storageService.eliminarImagen(url);
@@ -258,17 +257,5 @@ public class OfertaController {
             return ResponseEntity.ok(Map.of("mensaje", "Oferta eliminada"));
         }
         return ResponseEntity.notFound().build();
-    }
-    
-    // --- MÉTODO AUXILIAR ---
-    private Sort crearOrdenamiento(String campo, String direccion) {
-        Sort.Direction dir = "asc".equalsIgnoreCase(direccion) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        
-        return switch (campo) {
-            case "precio" -> Sort.by(dir, "precioOferta");
-            case "spark" -> Sort.by(dir, "sparkCount");
-            case "popularidad" -> Sort.by(dir, "sparkCount"); // Se calcula en memoria
-            default -> Sort.by(dir, "fechaPublicacion");
-        };
     }
 }
