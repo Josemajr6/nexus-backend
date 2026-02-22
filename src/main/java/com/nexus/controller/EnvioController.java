@@ -1,0 +1,182 @@
+package com.nexus.controller;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import com.nexus.entity.Envio;
+import com.nexus.service.EnvioService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@RestController
+@RequestMapping("/envio")
+@Tag(name = "Envíos", description = "Gestión del ciclo de envío y entrega con pago seguro")
+public class EnvioController {
+
+    @Autowired private EnvioService envioService;
+
+    // ── CONSULTAS ──────────────────────────────────────────────────────────
+
+    @GetMapping("/compra/{compraId}")
+    @Operation(summary = "Ver envío de una compra específica")
+    public ResponseEntity<?> porCompra(@PathVariable Integer compraId) {
+        return envioService.findByCompraId(compraId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/comprador/{usuarioId}")
+    @Operation(summary = "Ver todos los pedidos recibidos por el comprador")
+    public ResponseEntity<List<Envio>> porComprador(@PathVariable Integer usuarioId) {
+        return ResponseEntity.ok(envioService.getEnviosComoComprador(usuarioId));
+    }
+
+    @GetMapping("/vendedor/{usuarioId}")
+    @Operation(summary = "Ver todos los pedidos a enviar por el vendedor")
+    public ResponseEntity<List<Envio>> porVendedor(@PathVariable Integer usuarioId) {
+        return ResponseEntity.ok(envioService.getEnviosComoVendedor(usuarioId));
+    }
+
+    // ── VENDEDOR: MARCAR COMO ENVIADO ─────────────────────────────────────
+
+    /**
+     * El vendedor introduce el número de seguimiento y marca el pedido como enviado.
+     *
+     * Angular POST /envio/{id}/enviar con body:
+     * {
+     *   "transportista": "Correos",
+     *   "numeroSeguimiento": "1Z999AA10123456784",
+     *   "urlSeguimiento": "https://www.correos.es/seguimiento/...",
+     *   "diasEntregaEstimados": 3
+     * }
+     */
+    @PostMapping("/{envioId}/enviar")
+    @Operation(summary = "Vendedor marca el pedido como enviado con número de seguimiento")
+    public ResponseEntity<?> marcarEnviado(
+            @PathVariable Integer envioId,
+            @RequestBody Map<String, Object> body) {
+
+        try {
+            String transportista    = (String) body.get("transportista");
+            String tracking         = (String) body.get("numeroSeguimiento");
+            String urlTracking      = (String) body.get("urlSeguimiento");
+            Integer diasEstimados   = body.get("diasEntregaEstimados") != null
+                                      ? Integer.valueOf(body.get("diasEntregaEstimados").toString()) : 5;
+
+            LocalDateTime fechaEstimada = LocalDateTime.now().plusDays(diasEstimados);
+
+            Envio actualizado = envioService.marcarComoEnviado(
+                envioId, transportista, tracking, urlTracking, fechaEstimada);
+
+            return ResponseEntity.ok(actualizado);
+
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── COMPRADOR: CONFIRMAR RECEPCIÓN ────────────────────────────────────
+
+    /**
+     * El comprador confirma que recibió el producto.
+     * Esto libera los fondos al vendedor → la transacción se completa.
+     *
+     * Angular POST /envio/{id}/confirmar con body:
+     * { "valoracion": 5, "comentario": "Producto en perfecto estado, envío rápido" }
+     */
+    @PostMapping("/{envioId}/confirmar")
+    @Operation(summary = "Comprador confirma la recepción → fondos liberados al vendedor")
+    public ResponseEntity<?> confirmarEntrega(
+            @PathVariable Integer envioId,
+            @RequestBody(required = false) Map<String, Object> body) {
+
+        try {
+            Integer valoracion = null;
+            String comentario  = null;
+
+            if (body != null) {
+                valoracion = body.get("valoracion") != null
+                             ? Integer.valueOf(body.get("valoracion").toString()) : null;
+                comentario = (String) body.get("comentario");
+            }
+
+            Envio confirmado = envioService.confirmarEntrega(envioId, valoracion, comentario);
+            return ResponseEntity.ok(Map.of(
+                "mensaje",  "¡Entrega confirmada! Los fondos han sido liberados al vendedor.",
+                "envio",    confirmado
+            ));
+
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── VENTA EN PERSONA: CONFIRMAR ENTREGA ───────────────────────────────
+
+    @PostMapping("/{envioId}/confirmar-en-persona")
+    @Operation(summary = "Confirmar entrega en persona → completa la transacción")
+    public ResponseEntity<?> confirmarEnPersona(@PathVariable Integer envioId) {
+        try {
+            Envio confirmado = envioService.confirmarEntregaEnPersona(envioId);
+            return ResponseEntity.ok(Map.of(
+                "mensaje", "✅ Entrega en persona confirmada. ¡Transacción completada!",
+                "envio",   confirmado
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── DISPUTAS ──────────────────────────────────────────────────────────
+
+    /**
+     * El comprador abre una disputa.
+     * Los fondos se quedan en escrow hasta que el admin resuelva.
+     *
+     * Body: { "motivo": "El producto no llegó" }
+     */
+    @PostMapping("/{envioId}/disputa")
+    @Operation(summary = "Abrir disputa — los fondos quedan retenidos hasta resolución")
+    public ResponseEntity<?> abrirDisputa(
+            @PathVariable Integer envioId,
+            @RequestBody Map<String, String> body) {
+
+        try {
+            String motivo = body.getOrDefault("motivo", "Sin motivo especificado");
+            Envio actualizado = envioService.abrirDisputa(envioId, motivo);
+            return ResponseEntity.ok(Map.of(
+                "mensaje", "Disputa abierta. El equipo de Nexus revisará el caso en 24-48h.",
+                "envio",   actualizado
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── ADMIN: REEMBOLSO ──────────────────────────────────────────────────
+
+    @PostMapping("/reembolsar/{compraId}")
+    @Operation(summary = "Admin: procesar reembolso al comprador")
+    public ResponseEntity<?> reembolsar(@PathVariable Integer compraId) {
+        try {
+            envioService.procesarReembolso(compraId);
+            return ResponseEntity.ok(Map.of("mensaje", "Reembolso procesado correctamente"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+}

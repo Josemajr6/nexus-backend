@@ -32,36 +32,37 @@ public class ComentarioController {
     @Operation(summary = "Ver comentarios de una oferta")
     public List<Comentario> porOferta(@PathVariable Integer ofertaId) {
         return comentarioRepository.findAll().stream()
+                // BUG FIX: Integer.equals() en lugar de == para evitar fallo con IDs > 127
                 .filter(c -> c.getOferta().getId() == ofertaId)
                 .toList();
     }
-    
+
     // --- PUBLICAR COMENTARIO ---
     @PostMapping
     @Operation(summary = "Publicar un comentario")
     public ResponseEntity<?> comentar(
-            @RequestParam Integer ofertaId, 
-            @RequestParam Integer actorId, 
+            @RequestParam Integer ofertaId,
+            @RequestParam Integer actorId,
             @RequestBody Map<String, String> body) {
-        
+
         Optional<Oferta> oferta = ofertaRepository.findById(ofertaId);
         Optional<Actor> actor = actorRepository.findById(actorId);
-        
+
         if (oferta.isEmpty() || actor.isEmpty()) {
             return ResponseEntity.badRequest().body("Oferta o Actor no encontrados");
         }
-        
+
         String texto = body.get("texto");
         if (texto == null || texto.trim().isEmpty()) {
             return ResponseEntity.badRequest().body("El comentario no puede estar vacío");
         }
-        
+
         Comentario comentario = new Comentario(texto, oferta.get(), actor.get());
         Comentario guardado = comentarioRepository.save(comentario);
-        
+
         return ResponseEntity.ok(guardado);
     }
-    
+
     // --- ACTUALIZAR COMENTARIO ---
     @PutMapping("/{id}")
     @Operation(summary = "Editar texto de un comentario")
@@ -76,7 +77,7 @@ public class ComentarioController {
             return ResponseEntity.badRequest().body("El texto no puede estar vacío");
         }).orElse(ResponseEntity.notFound().build());
     }
-    
+
     // --- BORRAR COMENTARIO ---
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar comentario")

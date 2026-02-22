@@ -21,65 +21,70 @@ import org.springframework.web.cors.CorsConfiguration;
 @EnableWebSecurity
 public class SecurityConfiguration {
 
-    @Autowired
-    private JWTAuthenticationFilter jwtAuthenticationFilter;
+    @Autowired private JWTAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration c) throws Exception {
+        return c.getAuthenticationManager();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(request -> {
-                CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(List.of(
-                    "http://localhost:4200", 
-                    "https://nexus-app.es", 
-                    "https://www.nexus-app.es"
-                )); 
-                config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-                config.setAllowedHeaders(List.of("*"));
-                config.setAllowCredentials(true);
-                return config;
+                CorsConfiguration c = new CorsConfiguration();
+                c.setAllowedOrigins(List.of(
+                    "http://localhost:4200", "http://localhost:4201",
+                    "https://nexus-app.es", "https://www.nexus-app.es"));
+                c.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+                c.setAllowedHeaders(List.of("*"));
+                c.setAllowCredentials(true);
+                return c;
             }))
-            
             .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // --- Rutas PÚBLICAS (Corregido con el prefijo /auth) ---
-                .requestMatchers("/auth/**").permitAll() 
-                .requestMatchers(HttpMethod.GET, "/producto", "/producto/**").permitAll()
-                
-                // --- Rutas SWAGGER (Documentación) ---
+                // ── Públicas ──────────────────────────────────────────
+                .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers("/ws/**").permitAll()          // SockJS handshake HTTP
+                .requestMatchers(HttpMethod.GET, "/producto",   "/producto/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/vehiculo",   "/vehiculo/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/oferta",     "/oferta/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/votos/**").permitAll()
 
-                // --- Rutas ADMIN ---
+                // ── Admin ─────────────────────────────────────────────
                 .requestMatchers("/admin/**").hasAuthority("ADMIN")
-                
-                // --- Rutas EMPRESA ---
+                .requestMatchers("/envio/reembolsar/**").hasAuthority("ADMIN")
+
+                // ── Empresa ───────────────────────────────────────────
                 .requestMatchers("/empresa/**").hasAuthority("EMPRESA")
 
-                // --- GESTIÓN DE PRODUCTOS ---
-                .requestMatchers(HttpMethod.POST, "/producto").hasAnyAuthority("EMPRESA", "USUARIO") 
-                .requestMatchers(HttpMethod.PUT, "/producto/**").hasAnyAuthority("EMPRESA", "USUARIO")
-                .requestMatchers(HttpMethod.DELETE, "/producto/**").hasAnyAuthority("EMPRESA", "USUARIO")
+                // ── Productos y vehículos (escritura) ─────────────────
+                .requestMatchers(HttpMethod.POST,   "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
+                .requestMatchers(HttpMethod.PUT,    "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
+                .requestMatchers(HttpMethod.PATCH,  "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
+                .requestMatchers(HttpMethod.DELETE, "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
+                .requestMatchers(HttpMethod.POST,   "/vehiculo/**").hasAuthority("USUARIO")
+                .requestMatchers(HttpMethod.PUT,    "/vehiculo/**").hasAuthority("USUARIO")
+                .requestMatchers(HttpMethod.DELETE, "/vehiculo/**").hasAuthority("USUARIO")
 
-                // --- Rutas USUARIO ---
-                .requestMatchers("/compra/**").hasAnyAuthority("USUARIO", "ADMIN")
-                
-                // --- Rutas Comunes (Autenticados) ---
-                .requestMatchers("/contrato/**").authenticated()
+                // ── Chat, Compras, Envíos, Devoluciones, Ajustes ─────
+                .requestMatchers("/chat/**").authenticated()
+                .requestMatchers("/compra/**").hasAnyAuthority("USUARIO","ADMIN")
+                .requestMatchers("/envio/**").hasAnyAuthority("USUARIO","ADMIN")
+                .requestMatchers("/devolucion/**").hasAnyAuthority("USUARIO","ADMIN")
+                .requestMatchers("/ajustes/**").authenticated()
+                .requestMatchers("/votos/**").authenticated()
+
+                // ── Todo lo demás ─────────────────────────────────────
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-            
+
         return http.build();
     }
 }

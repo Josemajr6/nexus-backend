@@ -1,7 +1,6 @@
 package com.nexus.service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -9,100 +8,106 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.nexus.entity.Compra;
-import com.nexus.entity.EstadoCompra;
-import com.nexus.entity.EstadoProducto;
-import com.nexus.entity.Producto;
-import com.nexus.entity.Usuario;
-import com.nexus.repository.CompraRepository;
-import com.nexus.repository.ProductoRepository;
+import com.nexus.entity.*;
+import com.nexus.repository.*;
 
 @Service
 public class CompraService {
 
-    @Autowired
-    private CompraRepository compraRepository;
-
-    @Autowired
-    private ProductoRepository productoRepository;
-
-    @Autowired
-    private UsuarioService usuarioService;
+    @Autowired private CompraRepository compraRepository;
+    @Autowired private ProductoRepository productoRepository;
+    @Autowired private UsuarioService usuarioService;
+    @Autowired private EnvioService envioService;
 
     public List<Compra> findAll() {
         return compraRepository.findAll();
-    }
-
-    public List<Compra> findHistorialUsuario(Integer usuarioId) {
-        // Filtramos usando stream ya que en el repositorio base findAll trae todo
-        return compraRepository.findAll().stream()
-                .filter(c -> c.getComprador().getId() == usuarioId)
-                .toList();
     }
 
     public Optional<Compra> findById(Integer id) {
         return compraRepository.findById(id);
     }
 
-    // --- NUEVO: CONFIRMAR COMPRA (Tras pago exitoso en Stripe) ---
-    @Transactional
-    public Compra confirmarCompra(Integer compraId) {
-        Optional<Compra> oCompra = compraRepository.findById(compraId);
-        
-        if (oCompra.isPresent()) {
-            Compra compra = oCompra.get();
-            Producto producto = compra.getProducto();
-            
-            // Verificamos si sigue disponible
-            if (producto.getEstadoProducto() != EstadoProducto.DISPONIBLE) {
-                throw new IllegalStateException("Error: El producto ya ha sido vendido.");
-            }
-
-            // 1. Cambiar estado de la compra a COMPLETADA
-            compra.setEstado(EstadoCompra.COMPLETADA);
-            
-            // 2. Marcar producto como VENDIDO
-            producto.setEstadoProducto(EstadoProducto.VENDIDO);
-            productoRepository.save(producto);
-            
-            return compraRepository.save(compra);
-        }
-        return null;
+    public List<Compra> findHistorialUsuario(Integer usuarioId) {
+        return compraRepository.findAll().stream()
+                .filter(c -> c.getComprador().getId() == usuarioId)
+                .toList();
     }
 
-    // --- PROCESAR COMPRA DIRECTA (Lógica antigua corregida) ---
-    // Útil si decides hacer compras sin pasarela de pago en el futuro
+    /**
+     * Confirma el pago (llamado desde CompraController tras éxito de Stripe).
+     * Reserva el producto y crea el envío con los datos de entrega.
+     *
+     * @param compraId          ID de la compra creada en /compra/intent
+     * @param paymentIntentId   ID de Stripe para futuras operaciones (reembolso)
+     * @param metodoEntrega     ENVIO_PAQUETERIA o ENTREGA_EN_PERSONA
+     * @param nombreDest        Nombre del destinatario (solo para paquetería)
+     * @param direccion         Dirección de entrega
+     * @param ciudad            Ciudad
+     * @param cp                Código postal
+     * @param pais              País
+     * @param telefonoDest      Teléfono del destinatario
+     * @param precioEnvio       Coste del envío
+     */
     @Transactional
-    public Compra procesarCompraDirecta(Integer productoId, Integer compradorId) {
-        Optional<Producto> oProducto = productoRepository.findById(productoId);
-        Optional<Usuario> oComprador = usuarioService.findById(compradorId);
+    public Compra confirmarPago(Integer compraId, String paymentIntentId,
+                                 MetodoEntrega metodoEntrega,
+                                 String nombreDest, String direccion,
+                                 String ciudad, String cp, String pais,
+                                 String telefonoDest, Double precioEnvio) {
 
-        if (oProducto.isEmpty() || oComprador.isEmpty()) {
-            return null;
+        Compra compra = compraRepository.findById(compraId)
+                .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada: " + compraId));
+
+        if (compra.getEstado() != EstadoCompra.PENDIENTE) {
+            throw new IllegalStateException("La compra ya fue procesada (estado: " + compra.getEstado() + ")");
         }
 
-        Producto producto = oProducto.get();
-        Usuario comprador = oComprador.get();
-
+        Producto producto = compra.getProducto();
         if (producto.getEstadoProducto() != EstadoProducto.DISPONIBLE) {
-            throw new IllegalStateException("El producto ya no está disponible.");
+            throw new IllegalStateException("El producto ya no está disponible");
         }
 
-        if (producto.getPublicador().getId() == comprador.getId()) {
-            throw new IllegalArgumentException("No puedes comprar tu propio producto.");
-        }
+        // Actualizar compra
+        compra.setEstado(EstadoCompra.PAGADO);
+        compra.setStripePaymentIntentId(paymentIntentId);
+        compra.setMetodoEntrega(metodoEntrega);
+        compra.setFechaPago(LocalDateTime.now());
 
-        Compra nuevaCompra = new Compra();
-        nuevaCompra.setProducto(producto);
-        nuevaCompra.setComprador(comprador);
-        nuevaCompra.setFechaCompra(LocalDateTime.now());
-        
-
-        nuevaCompra.setEstado(EstadoCompra.COMPLETADA); 
-        
-        producto.setEstadoProducto(EstadoProducto.VENDIDO);
+        // Reservar el producto para que nadie más lo compre
+        producto.setEstadoProducto(EstadoProducto.RESERVADO);
         productoRepository.save(producto);
 
-        return compraRepository.save(nuevaCompra);
+        Compra guardada = compraRepository.save(compra);
+
+        // Crear el envío
+        envioService.crearEnvio(guardada, metodoEntrega,
+                nombreDest, direccion, ciudad, cp, pais, telefonoDest, precioEnvio);
+
+        return guardada;
+    }
+
+    /**
+     * Cancela una compra pendiente de pago o pendiente de envío.
+     * Si ya fue pagada, genera reembolso automático.
+     */
+    @Transactional
+    public Compra cancelar(Integer compraId) {
+        Compra compra = compraRepository.findById(compraId)
+                .orElseThrow(() -> new IllegalArgumentException("Compra no encontrada"));
+
+        if (compra.getEstado() == EstadoCompra.COMPLETADA || compra.getEstado() == EstadoCompra.REEMBOLSADA) {
+            throw new IllegalStateException("No se puede cancelar una compra ya completada o reembolsada");
+        }
+
+        // Si ya pagó, procesar reembolso
+        if (compra.getEstado() == EstadoCompra.PAGADO || compra.getEstado() == EstadoCompra.ENVIADO) {
+            envioService.procesarReembolso(compraId);
+        }
+
+        compra.setEstado(EstadoCompra.CANCELADA);
+        compra.getProducto().setEstadoProducto(EstadoProducto.DISPONIBLE);
+        productoRepository.save(compra.getProducto());
+
+        return compraRepository.save(compra);
     }
 }
