@@ -1,10 +1,21 @@
 package com.nexus.entity;
 
+/**
+ * Badge visual de una oferta.
+ * Se muestra como etiqueta de color en Angular.
+ *
+ * CHOLLAZO    → Oferta excepcional (rojo)
+ * DESTACADA   → Curada por el equipo (naranja)
+ * NUEVA       → Publicada hace menos de 1 hora (verde)
+ * EXPIRA_HOY  → Expira en menos de 24h (amarillo)
+ * GRATUITA    → Precio = 0€ (azul)
+ * PORCENTAJE  → Descuento muy alto (morado)
+ */
 public enum BadgeOferta {
-    LEGENDARY,   // +100 Spark Score (⚡⚡⚡ Legendario)
-    FIRE,        // +50 Spark Score (🔥 En llamas)
-    HOT,         // +20 Spark Score (🌶️ Caliente)
-    TRENDING,    // +5 Spark Score (📈 Trending)
-    NORMAL,      // Entre -10 y +5
-    EXPIRED      // -10 o menos (💀 Expirado/Malo)
+    CHOLLAZO,
+    DESTACADA,
+    NUEVA,
+    EXPIRA_HOY,
+    GRATUITA,
+    PORCENTAJE
 }

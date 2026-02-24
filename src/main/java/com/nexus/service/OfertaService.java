@@ -2,255 +2,227 @@ package com.nexus.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
-import com.nexus.entity.Oferta;
-import com.nexus.entity.SparkVoto;
-import com.nexus.entity.Usuario;
-import com.nexus.repository.OfertaRepository;
-import com.nexus.repository.SparkVotoRepository;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
+import com.nexus.entity.*;
+import com.nexus.repository.*;
 
 @Service
 public class OfertaService {
-    
-    @Autowired
-    private OfertaRepository ofertaRepository;
-    
-    @Autowired
-    private SparkVotoRepository sparkVotoRepository;
-    
-    @Autowired
-    private NotificacionService notificacionService;
-    
-    @Autowired
-    private EntityManager entityManager;
-    
-    // Búsqueda dinámica con Criteria API
-    public Page<Oferta> buscarConFiltros(
-            String categoria,
-            String tienda,
-            Double precioMin,
-            Double precioMax,
-            String busqueda,
-            Boolean soloActivas,
-            String ordenarPor,
-            String direccion,
-            Pageable pageable) {
-        
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Oferta> cq = cb.createQuery(Oferta.class);
-        Root<Oferta> oferta = cq.from(Oferta.class);
-        
-        // Construir predicados dinámicamente
-        List<Predicate> predicates = construirPredicados(cb, oferta, categoria, tienda, 
-                                                         precioMin, precioMax, busqueda, soloActivas);
-        
-        cq.where(predicates.toArray(new Predicate[0]));
-        
-        // Ordenamiento
-        aplicarOrdenamiento(cb, cq, oferta, ordenarPor, direccion);
-        
-        // Ejecutar query
-        TypedQuery<Oferta> query = entityManager.createQuery(cq);
-        query.setFirstResult((int) pageable.getOffset());
-        query.setMaxResults(pageable.getPageSize());
-        
-        List<Oferta> resultados = query.getResultList();
-        
-        // Contar total
-        long total = contarResultados(categoria, tienda, precioMin, precioMax, busqueda, soloActivas);
-        
-        return new PageImpl<>(resultados, pageable, total);
-    }
-    
-    private List<Predicate> construirPredicados(CriteriaBuilder cb, Root<Oferta> root,
-                                                String categoria, String tienda,
-                                                Double precioMin, Double precioMax,
-                                                String busqueda, Boolean soloActivas) {
-        List<Predicate> predicates = new java.util.ArrayList<>();
-        
-        if (categoria != null && !categoria.isEmpty()) {
-            predicates.add(cb.equal(root.get("categoria"), categoria));
-        }
-        
-        if (tienda != null && !tienda.isEmpty()) {
-            predicates.add(cb.like(cb.lower(root.get("tienda")), "%" + tienda.toLowerCase() + "%"));
-        }
-        
-        if (precioMin != null) {
-            predicates.add(cb.greaterThanOrEqualTo(root.get("precioOferta"), precioMin));
-        }
-        
-        if (precioMax != null) {
-            predicates.add(cb.lessThanOrEqualTo(root.get("precioOferta"), precioMax));
-        }
-        
-        if (busqueda != null && !busqueda.isEmpty()) {
-            String searchPattern = "%" + busqueda.toLowerCase() + "%";
-            Predicate tituloMatch = cb.like(cb.lower(root.get("titulo")), searchPattern);
-            Predicate descripcionMatch = cb.like(cb.lower(root.get("descripcion")), searchPattern);
-            predicates.add(cb.or(tituloMatch, descripcionMatch));
-        }
-        
-        if (soloActivas != null && soloActivas) {
-            predicates.add(cb.equal(root.get("esActiva"), true));
-        }
-        
-        return predicates;
-    }
-    
-    private void aplicarOrdenamiento(CriteriaBuilder cb, CriteriaQuery<Oferta> cq, 
-                                    Root<Oferta> root, String ordenarPor, String direccion) {
-        boolean asc = "asc".equalsIgnoreCase(direccion);
-        
-        switch (ordenarPor != null ? ordenarPor : "fecha") {
-            case "precio":
-                cq.orderBy(asc ? cb.asc(root.get("precioOferta")) : cb.desc(root.get("precioOferta")));
-                break;
-            case "spark":
-                cq.orderBy(asc ? cb.asc(root.get("sparkCount")) : cb.desc(root.get("sparkCount")));
-                break;
-            case "vistas":
-                cq.orderBy(asc ? cb.asc(root.get("numeroVistas")) : cb.desc(root.get("numeroVistas")));
-                break;
-            default:
-                cq.orderBy(asc ? cb.asc(root.get("fechaPublicacion")) : cb.desc(root.get("fechaPublicacion")));
-        }
-    }
-    
-    private long contarResultados(String categoria, String tienda, Double precioMin, 
-                                 Double precioMax, String busqueda, Boolean soloActivas) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> cq = cb.createQuery(Long.class);
-        Root<Oferta> root = cq.from(Oferta.class);
-        
-        List<Predicate> predicates = construirPredicados(cb, root, categoria, tienda, 
-                                                        precioMin, precioMax, busqueda, soloActivas);
-        
-        cq.select(cb.count(root));
-        cq.where(predicates.toArray(new Predicate[0]));
-        
-        return entityManager.createQuery(cq).getSingleResult();
-    }
-    
-    // ⚡ SISTEMA SPARK
-    @Transactional
-    public void votarOferta(Integer ofertaId, Integer usuarioId, Boolean esSpark) {
-        Optional<Oferta> ofertaOpt = ofertaRepository.findById(ofertaId);
-        if (ofertaOpt.isEmpty()) {
-            throw new IllegalArgumentException("Oferta no encontrada");
-        }
-        
-        Oferta oferta = ofertaOpt.get();
-        Optional<SparkVoto> votoExistente = sparkVotoRepository.findByUsuarioAndOferta(usuarioId, ofertaId);
-        
-        if (votoExistente.isPresent()) {
-            SparkVoto voto = votoExistente.get();
-            
-            if (voto.getEsSpark().equals(esSpark)) {
-                // Quitar voto
-                if (esSpark) oferta.decrementarSpark();
-                else oferta.decrementarDrip();
-                sparkVotoRepository.delete(voto);
-            } else {
-                // Cambiar voto
-                if (esSpark) {
-                    oferta.decrementarDrip();
-                    oferta.incrementarSpark();
-                } else {
-                    oferta.decrementarSpark();
-                    oferta.incrementarDrip();
-                }
-                voto.setEsSpark(esSpark);
-                voto.setFechaVoto(LocalDateTime.now());
-                sparkVotoRepository.save(voto);
-            }
-        } else {
-            // Nuevo voto
-            Usuario usuario = new Usuario();
-            usuario.setId(usuarioId);
-            
-            SparkVoto nuevoVoto = new SparkVoto(usuario, oferta, esSpark);
-            sparkVotoRepository.save(nuevoVoto);
-            
-            if (esSpark) oferta.incrementarSpark();
-            else oferta.incrementarDrip();
-        }
-        
-        ofertaRepository.save(oferta);
-        
-        // Notificar hitos
-        if (oferta.getSparkScore() % 50 == 0 && oferta.getSparkScore() > 0) {
-            notificacionService.notificarHitoSpark(oferta);
-        }
-    }
-    
-    // Métodos básicos
+
+    @Autowired private OfertaRepository    ofertaRepository;
+    @Autowired private ActorRepository     actorRepository;
+    @Autowired private SparkVotoRepository sparkVotoRepository;
+    @Autowired private StorageService      storageService;
+
+    // ---- CRUD basico (usado directamente por OfertaController) -----------
+
     public List<Oferta> findAll() {
-        return ofertaRepository.findAll();
+        return ofertaRepository.findAll(Sort.by(Sort.Direction.DESC, "fechaPublicacion"));
     }
-    
+
     public Optional<Oferta> findById(Integer id) {
         return ofertaRepository.findById(id);
     }
-    
+
+    @Transactional
     public Oferta save(Oferta oferta) {
+        if (oferta.getFechaPublicacion() == null)
+            oferta.setFechaPublicacion(LocalDateTime.now());
+        oferta.actualizarBadge();
         return ofertaRepository.save(oferta);
     }
-    
+
+    @Transactional
     public void deleteById(Integer id) {
         ofertaRepository.deleteById(id);
     }
-    
-    // Ofertas especiales
+
+    // ---- Listados especiales (usados por OfertaController) ---------------
+
+    public List<Oferta> getActivas() {
+        return ofertaRepository.findByEsActivaTrue();
+    }
+
     public List<Oferta> obtenerDestacadas() {
-        LocalDateTime hace7dias = LocalDateTime.now().minusDays(7);
-        return ofertaRepository.findDestacadas(hace7dias, org.springframework.data.domain.PageRequest.of(0, 10));
+        return ofertaRepository.findDestacadas(
+            LocalDateTime.now().minusDays(7), PageRequest.of(0, 20));
     }
-    
+
     public List<Oferta> obtenerTrending() {
-        LocalDateTime hace24h = LocalDateTime.now().minusHours(24);
-        return ofertaRepository.findTrending(hace24h, org.springframework.data.domain.PageRequest.of(0, 15));
+        return ofertaRepository.findTrending(
+            LocalDateTime.now().minusHours(24), PageRequest.of(0, 20));
     }
-    
+
     public List<Oferta> obtenerTopSpark() {
-        return ofertaRepository.findTopBySparkScore(org.springframework.data.domain.PageRequest.of(0, 20));
+        return ofertaRepository.findTopBySparkScore(PageRequest.of(0, 20));
     }
-    
+
     public List<Oferta> obtenerProximasExpirar() {
-        LocalDateTime ahora = LocalDateTime.now();
-        LocalDateTime en24h = ahora.plusHours(24);
-        return ofertaRepository.findProximasExpirar(ahora, en24h);
+        return ofertaRepository.findProximasExpirar(
+            LocalDateTime.now(), LocalDateTime.now().plusHours(24));
     }
-    
+
+    public List<Oferta> getRecientes(int limite) {
+        return ofertaRepository.findRecientes(PageRequest.of(0, limite));
+    }
+
+    public List<Oferta> getByCategoria(String categoria) {
+        return ofertaRepository.findByCategoria(categoria);
+    }
+
+    public List<Oferta> getByBadge(BadgeOferta badge) {
+        return ofertaRepository.findByBadgeAndEsActivaTrue(badge);
+    }
+
+    public List<Oferta> buscarTexto(String q) {
+        return ofertaRepository.buscarPorTexto(q);
+    }
+
+    public List<Oferta> getByActorId(Integer actorId) {
+        return ofertaRepository.findByActorId(actorId);
+    }
+
+    // ---- Busqueda con filtros (firma exacta que usa OfertaController) -----
+    //
+    // OfertaController llama con:
+    //   buscarConFiltros(categoria, tienda, precioMin, precioMax,
+    //                    busqueda, soloActivas, sortField, sortDir, pageable)
+    //
+    public Page<Oferta> buscarConFiltros(String categoria, String tienda,
+                                          Double precioMin, Double precioMax,
+                                          String busqueda, Boolean soloActivas,
+                                          String sortField, String sortDir,
+                                          Pageable pageable) {
+        boolean solo = Boolean.TRUE.equals(soloActivas);
+
+        if (!pageable.getSort().isSorted() && sortField != null && !sortField.isBlank()) {
+            Sort sort = "asc".equalsIgnoreCase(sortDir)
+                ? Sort.by(Sort.Direction.ASC,  sortField)
+                : Sort.by(Sort.Direction.DESC, sortField);
+            pageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+        }
+        return ofertaRepository.buscarConFiltros(
+            categoria, tienda, precioMin, precioMax, busqueda, solo, pageable);
+    }
+
+    // Overload conveniente sin sortField/sortDir (para llamadas internas)
+    public Page<Oferta> buscarConFiltros(String categoria, String tienda,
+                                          Double precioMin, Double precioMax,
+                                          String busqueda, boolean soloActivas,
+                                          int page, int size) {
+        return ofertaRepository.buscarConFiltros(
+            categoria, tienda, precioMin, precioMax, busqueda, soloActivas,
+            PageRequest.of(page, size));
+    }
+
+    // ---- Interacciones (usadas por OfertaController) ---------------------
+
     @Transactional
-    public void incrementarVistas(Integer id) {
-        ofertaRepository.findById(id).ifPresent(oferta -> {
-            oferta.incrementarVistas();
-            ofertaRepository.save(oferta);
+    public void incrementarVistas(Integer ofertaId) {
+        ofertaRepository.findById(ofertaId).ifPresent(o -> {
+            o.setNumeroVistas(o.getNumeroVistas() != null ? o.getNumeroVistas() + 1 : 1);
+            ofertaRepository.save(o);
         });
     }
-    
+
     @Transactional
-    public void incrementarCompartidos(Integer id) {
-        ofertaRepository.findById(id).ifPresent(oferta -> {
-            oferta.incrementarCompartidos();
-            ofertaRepository.save(oferta);
+    public void incrementarCompartidos(Integer ofertaId) {
+        ofertaRepository.findById(ofertaId).ifPresent(o -> {
+            o.setNumeroCompartidos(o.getNumeroCompartidos() != null ? o.getNumeroCompartidos() + 1 : 1);
+            ofertaRepository.save(o);
         });
+    }
+
+    // ---- Votos (usado por OfertaController: votarOferta(actorId, ofertaId, isUpvote)) --
+
+    @Transactional
+    public int votarOferta(Integer actorId, Integer ofertaId, Boolean isUpvote) {
+        int valor = Boolean.TRUE.equals(isUpvote) ? 1 : -1;
+        Oferta oferta = ofertaRepository.findById(ofertaId)
+            .orElseThrow(() -> new IllegalArgumentException("Oferta no encontrada"));
+        Actor actor = actorRepository.findById(actorId)
+            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+
+        Optional<SparkVoto> prev = sparkVotoRepository.findByActorIdAndOfertaId(actorId, ofertaId);
+        if (prev.isPresent()) {
+            SparkVoto v = prev.get();
+            if (v.getValor() == valor) {
+                // Toggle: quitar voto
+                if (valor == 1) oferta.setSparkCount(Math.max(0, oferta.getSparkCount() - 1));
+                else            oferta.setDripCount(Math.max(0, oferta.getDripCount() - 1));
+                sparkVotoRepository.deleteByActorAndOferta(actorId, ofertaId);
+            } else {
+                // Cambiar voto
+                if (valor == 1) {
+                    oferta.setSparkCount(oferta.getSparkCount() + 1);
+                    oferta.setDripCount(Math.max(0, oferta.getDripCount() - 1));
+                } else {
+                    oferta.setDripCount(oferta.getDripCount() + 1);
+                    oferta.setSparkCount(Math.max(0, oferta.getSparkCount() - 1));
+                }
+                v.setValor(valor);
+                sparkVotoRepository.save(v);
+            }
+        } else {
+            sparkVotoRepository.save(new SparkVoto(actor, oferta, Boolean.TRUE.equals(isUpvote)));
+            if (valor == 1) oferta.setSparkCount(oferta.getSparkCount() + 1);
+            else            oferta.setDripCount(oferta.getDripCount() + 1);
+        }
+        ofertaRepository.save(oferta);
+        return oferta.getSparkScore();
+    }
+
+    // ---- Crear con imagenes ----------------------------------------------
+
+    @Transactional
+    public Oferta crear(Oferta oferta, Integer actorId, List<MultipartFile> imagenes) {
+        Actor actor = actorRepository.findById(actorId)
+            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+        oferta.setActor(actor);
+        oferta.setFechaPublicacion(LocalDateTime.now());
+        oferta.setEsActiva(true);
+        oferta.setSparkCount(0);
+        oferta.setDripCount(0);
+
+        if (imagenes != null) {
+            for (MultipartFile img : imagenes) {
+                String url = storageService.subirImagen(img);
+                if (url != null) {
+                    if (oferta.getImagenPrincipal() == null) oferta.setImagenPrincipal(url);
+                    else oferta.addImagenGaleria(url);
+                }
+            }
+        }
+        oferta.actualizarBadge();
+        return ofertaRepository.save(oferta);
+    }
+
+    // ---- Meta-datos para los filtros del frontend ------------------------
+
+    public List<String> getCategorias() { return ofertaRepository.findCategoriasDistintas(); }
+    public List<String> getTiendas()    { return ofertaRepository.findTiendasDistintas(); }
+
+    public Map<String, Object> getEstadisticas() {
+        return Map.of(
+            "totalActivas", ofertaRepository.countActivas(),
+            "categorias",   getCategorias(),
+            "tiendas",      getTiendas()
+        );
+    }
+
+    public Oferta findByIdOrThrow(Integer id) {
+        return ofertaRepository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Oferta no encontrada: " + id));
     }
 }

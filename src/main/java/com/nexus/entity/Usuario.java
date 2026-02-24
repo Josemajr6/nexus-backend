@@ -3,67 +3,80 @@ package com.nexus.entity;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
+@Table(name = "usuario")
+@PrimaryKeyJoinColumn(name = "actor_id")
 public class Usuario extends Actor {
 
-    private String telefono;
-    
-    private boolean esVerificado; 
-    
-    // ✅ NUEVO: Avatar con valor por defecto
     @Column(columnDefinition = "TEXT")
-    private String avatar = "https://res.cloudinary.com/dzahpgslo/image/upload/v1234567890/defaults/avatar-default.png";
-    
+    private String avatar;
+
+    @Column(columnDefinition = "TEXT")
     private String biografia;
-    private Integer reputacion;
+
     private String ubicacion;
+    private String telefono;
 
-    @OneToMany(mappedBy = "publicador", cascade = CascadeType.ALL)
-    @JsonIgnore
-    private List<Producto> productos = new ArrayList<>();
+    @Column(nullable = false)
+    private double reputacion = 0.0;
 
-    @OneToMany(mappedBy = "comprador", cascade = CascadeType.ALL)
-    @JsonIgnore
-    private List<Compra> compras = new ArrayList<>();
+    @Column(nullable = false)
+    private int totalVentas = 0;
 
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL)
-    @JsonIgnore
-    private List<Mensaje> mensajes = new ArrayList<>();
+    @Column(name = "es_verificado", nullable = false)
+    private boolean esVerificado = false;
 
-    public Usuario() {
-        super();
-        this.esVerificado = false;
-        this.reputacion = 0;
-    }
+    @Column(name = "perfil_publico", nullable = false)
+    private boolean perfilPublico = true;
 
-    // Getters y Setters
-    public String getTelefono() { return telefono; }
-    public void setTelefono(String telefono) { this.telefono = telefono; }
+    @Column(name = "mostrar_telefono", nullable = false)
+    private boolean mostrarTelefono = false;
 
-    public boolean isEsVerificado() { return esVerificado; }
-    public void setEsVerificado(boolean esVerificado) { this.esVerificado = esVerificado; }
+    @Column(name = "mostrar_ubicacion", nullable = false)
+    private boolean mostrarUbicacion = true;
 
-    // ✅ NUEVO: Getters/Setters para avatar
-    public String getAvatar() { return avatar; }
-    public void setAvatar(String avatar) { this.avatar = avatar != null ? avatar : "https://res.cloudinary.com/dzahpgslo/image/upload/v1234567890/defaults/avatar-default.png"; }
+    @Embedded
+    @AttributeOverrides({
+        @AttributeOverride(name = "nombre",       column = @Column(name = "dir_nombre")),
+        @AttributeOverride(name = "direccion",    column = @Column(name = "dir_calle")),
+        @AttributeOverride(name = "ciudad",       column = @Column(name = "dir_ciudad")),
+        @AttributeOverride(name = "codigoPostal", column = @Column(name = "dir_cp")),
+        @AttributeOverride(name = "pais",         column = @Column(name = "dir_pais")),
+        @AttributeOverride(name = "telefono",     column = @Column(name = "dir_telefono"))
+    })
+    private DireccionEnvio direccionPorDefecto;
 
-    public String getBiografia() { return biografia; }
-    public void setBiografia(String biografia) { this.biografia = biografia; }
+    @ElementCollection
+    @CollectionTable(name = "usuario_bloqueados",
+                     joinColumns = @JoinColumn(name = "usuario_id"))
+    @Column(name = "bloqueado_id")
+    private List<Integer> blockedUserIds = new ArrayList<>();
 
-    public Integer getReputacion() { return reputacion; }
-    public void setReputacion(Integer reputacion) { this.reputacion = reputacion; }
+    public Usuario() {}
 
-    public String getUbicacion() { return ubicacion; }
-    public void setUbicacion(String ubicacion) { this.ubicacion = ubicacion; }
-
-    public List<Producto> getProductos() { return productos; }
-    public void setProductos(List<Producto> productos) { this.productos = productos; }
-
-    public List<Compra> getCompras() { return compras; }
-    public void setCompras(List<Compra> compras) { this.compras = compras; }
-
-    public List<Mensaje> getMensajes() { return mensajes; }
-    public void setMensajes(List<Mensaje> mensajes) { this.mensajes = mensajes; }
+    public String  getAvatar()                              { return avatar; }
+    public void    setAvatar(String a)                      { this.avatar = a; }
+    public String  getBiografia()                           { return biografia; }
+    public void    setBiografia(String b)                   { this.biografia = b; }
+    public String  getUbicacion()                           { return ubicacion; }
+    public void    setUbicacion(String u)                   { this.ubicacion = u; }
+    public String  getTelefono()                            { return telefono; }
+    public void    setTelefono(String t)                    { this.telefono = t; }
+    public double  getReputacion()                          { return reputacion; }
+    public void    setReputacion(double r)                  { this.reputacion = r; }
+    public int     getTotalVentas()                         { return totalVentas; }
+    public void    setTotalVentas(int t)                    { this.totalVentas = t; }
+    public boolean isEsVerificado()                         { return esVerificado; }
+    public void    setEsVerificado(boolean v)               { this.esVerificado = v; }
+    public boolean isPerfilPublico()                        { return perfilPublico; }
+    public void    setPerfilPublico(boolean b)              { this.perfilPublico = b; }
+    public boolean getMostrarTelefono()                     { return mostrarTelefono; }
+    public void    setMostrarTelefono(boolean b)            { this.mostrarTelefono = b; }
+    public boolean getMostrarUbicacion()                    { return mostrarUbicacion; }
+    public void    setMostrarUbicacion(boolean b)           { this.mostrarUbicacion = b; }
+    public DireccionEnvio getDireccionPorDefecto()          { return direccionPorDefecto; }
+    public void    setDireccionPorDefecto(DireccionEnvio d) { this.direccionPorDefecto = d; }
+    public List<Integer> getBlockedUserIds()                { return blockedUserIds; }
+    public void    setBlockedUserIds(List<Integer> l)       { this.blockedUserIds = l; }
 }

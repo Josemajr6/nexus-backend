@@ -1,107 +1,135 @@
 package com.nexus.service;
 
-import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import jakarta.mail.internet.MimeMessage;
+
 /**
- * Servicio centralizado para envío de emails.
- * Todos los envíos son @Async → no bloquean el hilo HTTP.
- *
- * Usos en la app:
- *  - Verificación de cuenta tras el registro
- *  - Olvidé mi contraseña
- *  - Código OTP de dos factores (2FA)
- *  - Confirmación de pedido y cambios de estado del envío
- *  - Notificación de nuevo mensaje (si el usuario tiene el ajuste activado)
+ * Servicio de email.
+ * Todos los metodos son @Async para no bloquear el hilo HTTP.
  */
 @Service
 public class EmailService {
 
-    @Autowired(required = false)
+    @Autowired
     private JavaMailSender mailSender;
 
-    @Value("${nexus.mail.from:noreply@nexus-app.es}")
-    private String from;
+    @Value("${nexus.mail.from:somosnexusapp@gmail.com}")
+    private String fromEmail;
+
+    @Value("${nexus.frontend.url:http://localhost:4200}")
+    private String frontendUrl;
+
+    // ---- Email de texto plano ------------------------------------------
 
     @Async
-    public void enviarEmailHtml(String destinatario, String asunto, String htmlBody) {
-        if (mailSender == null) {
-            System.out.println("📧 [EMAIL-DEV] Para: " + destinatario + " | Asunto: " + asunto);
-            return;
+    public void enviarEmail(String to, String subject, String body) {
+        try {
+            SimpleMailMessage msg = new SimpleMailMessage();
+            msg.setFrom(fromEmail);
+            msg.setTo(to);
+            msg.setSubject(subject);
+            msg.setText(body);
+            mailSender.send(msg);
+        } catch (Exception e) {
+            System.err.println("Error enviando email a " + to + ": " + e.getMessage());
         }
+    }
+
+    // ---- Email HTML -----------------------------------------------------
+
+    @Async
+    public void enviarEmailHtml(String to, String subject, String htmlBody) {
         try {
             MimeMessage msg = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
-            helper.setFrom(from);
-            helper.setTo(destinatario);
-            helper.setSubject(asunto);
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
             helper.setText(htmlBody, true);
             mailSender.send(msg);
         } catch (Exception e) {
-            System.err.println("❌ Error enviando email a " + destinatario + ": " + e.getMessage());
+            System.err.println("Error enviando HTML email a " + to + ": " + e.getMessage());
         }
     }
 
+    // ---- Emails especificos de la app ----------------------------------
+
     @Async
-    public void enviarEmail(String destinatario, String asunto, String texto) {
-        enviarEmailHtml(destinatario, asunto,
-            "<div style='font-family:Arial,sans-serif;padding:24px'>" + texto + "</div>");
+    public void enviarVerificacion(String to, String username, String codigo) {
+        String html = "<html><body style='font-family:sans-serif;max-width:600px;margin:auto'>"
+            + "<h2>Verifica tu cuenta en Nexus</h2>"
+            + "<p>Hola <b>" + username + "</b>,</p>"
+            + "<p>Tu codigo de verificacion es:</p>"
+            + "<div style='font-size:36px;font-weight:bold;letter-spacing:12px;"
+            + "background:#F5F5F5;padding:16px;text-align:center;border-radius:8px'>"
+            + codigo + "</div>"
+            + "<p>Este codigo expira en 30 minutos.</p>"
+            + "<p>Si no has creado una cuenta en Nexus, ignora este email.</p>"
+            + "</body></html>";
+        enviarEmailHtml(to, "Verifica tu cuenta en Nexus", html);
     }
 
-    /** Email de verificación de cuenta tras registro */
     @Async
-    public void enviarVerificacion(String destinatario, String username, String codigo) {
-        String html = """
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;background:#f9f9f9;border-radius:12px">
-              <h2 style="color:#FF6B35">📧 Verifica tu cuenta en Nexus</h2>
-              <p>Hola <strong>%s</strong>, gracias por registrarte.</p>
-              <p>Introduce este código en la app para activar tu cuenta:</p>
-              <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:24px;background:#fff;border-radius:8px;border:2px solid #FF6B35;color:#FF6B35">%s</div>
-              <p style="color:#888;font-size:13px">Este código expira en 30 minutos.</p>
-            </div>
-            """.formatted(username, codigo);
-        enviarEmailHtml(destinatario, "Código de verificación — Nexus", html);
+    public void enviarResetPassword(String to, String token) {
+        String link = frontendUrl + "/auth/reset-password?token=" + token;
+        String html = "<html><body style='font-family:sans-serif;max-width:600px;margin:auto'>"
+            + "<h2>Restablecer contrasena - Nexus</h2>"
+            + "<p>Haz clic en el siguiente enlace para restablecer tu contrasena:</p>"
+            + "<a href='" + link + "' style='background:#FF5722;color:#fff;padding:12px 24px;"
+            + "border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0'>"
+            + "Restablecer contrasena</a>"
+            + "<p style='color:#666;font-size:12px'>Este enlace expira en 15 minutos. "
+            + "Si no solicitaste este cambio, ignora este email.</p>"
+            + "</body></html>";
+        enviarEmailHtml(to, "Restablecer contrasena - Nexus", html);
     }
 
-    /** Email con código OTP para 2FA */
     @Async
-    public void enviarOtp2FA(String destinatario, String username, String codigo) {
-        String html = """
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;background:#f9f9f9;border-radius:12px">
-              <h2 style="color:#FF6B35">🔒 Verificación en dos pasos</h2>
-              <p>Hola <strong>%s</strong>,</p>
-              <p>Tu código de acceso único para Nexus es:</p>
-              <div style="font-size:40px;font-weight:bold;letter-spacing:10px;text-align:center;padding:24px;background:#fff;border-radius:8px;border:2px solid #FF6B35;color:#FF6B35">%s</div>
-              <p style="color:#888;font-size:13px">Este código expira en 10 minutos. No lo compartas con nadie.</p>
-            </div>
-            """.formatted(username, codigo);
-        enviarEmailHtml(destinatario, "Código de acceso — Nexus", html);
+    public void enviarOtpDosFactores(String to, String otp) {
+        String html = "<html><body style='font-family:sans-serif;max-width:600px;margin:auto'>"
+            + "<h2>Codigo de verificacion - Nexus</h2>"
+            + "<p>Tu codigo de verificacion de dos factores es:</p>"
+            + "<div style='font-size:36px;font-weight:bold;letter-spacing:12px;"
+            + "background:#F5F5F5;padding:16px;text-align:center;border-radius:8px'>"
+            + otp + "</div>"
+            + "<p>Este codigo expira en 10 minutos. No lo compartas con nadie.</p>"
+            + "</body></html>";
+        enviarEmailHtml(to, "Codigo de verificacion - Nexus", html);
     }
 
-    /** Notificación de pedido enviado */
     @Async
-    public void enviarNotificacionPedidoEnviado(String destinatario, String username,
-                                                 String producto, String transportista,
-                                                 String tracking, String urlTracking) {
-        String html = """
-            <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;background:#f9f9f9;border-radius:12px">
-              <h2 style="color:#FF6B35">🚚 ¡Tu pedido está en camino!</h2>
-              <p>Hola <strong>%s</strong>,</p>
-              <p>Tu pedido <strong>%s</strong> ha sido enviado.</p>
-              <table style="width:100%%;border-collapse:collapse;margin:16px 0">
-                <tr><td style="padding:8px;color:#888">Transportista</td><td style="padding:8px;font-weight:bold">%s</td></tr>
-                <tr><td style="padding:8px;color:#888">Nº seguimiento</td><td style="padding:8px;font-weight:bold">%s</td></tr>
-              </table>
-              <a href="%s" style="display:inline-block;padding:14px 28px;background:#FF6B35;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">
-                Seguir mi pedido
-              </a>
-            </div>
-            """.formatted(username, producto, transportista, tracking, urlTracking);
-        enviarEmailHtml(destinatario, "Tu pedido está en camino — Nexus", html);
+    public void enviarConfirmacionCompra(String to, String tituloProducto, Double precio) {
+        String html = "<html><body style='font-family:sans-serif;max-width:600px;margin:auto'>"
+            + "<h2>Compra confirmada - Nexus</h2>"
+            + "<p>Tu compra ha sido confirmada correctamente.</p>"
+            + "<table style='width:100%;border-collapse:collapse'>"
+            + "<tr><td style='padding:8px;border-bottom:1px solid #eee'><b>Producto</b></td>"
+            + "<td style='padding:8px;border-bottom:1px solid #eee'>" + tituloProducto + "</td></tr>"
+            + "<tr><td style='padding:8px'><b>Total</b></td>"
+            + "<td style='padding:8px'>" + String.format("%.2f", precio) + " EUR</td></tr>"
+            + "</table>"
+            + "<p>El vendedor ha sido notificado y preparara tu pedido.</p>"
+            + "</body></html>";
+        enviarEmailHtml(to, "Compra confirmada - Nexus", html);
+    }
+
+    @Async
+    public void enviarNotificacionEnvio(String to, String tituloProducto,
+                                         String trackingNum, String transportista) {
+        String html = "<html><body style='font-family:sans-serif;max-width:600px;margin:auto'>"
+            + "<h2>Tu pedido ha sido enviado - Nexus</h2>"
+            + "<p>Tu compra de <b>" + tituloProducto + "</b> ha sido enviada.</p>"
+            + (trackingNum != null
+                ? "<p><b>Numero de seguimiento:</b> " + trackingNum + " (" + transportista + ")</p>"
+                : "")
+            + "</body></html>";
+        enviarEmailHtml(to, "Tu pedido esta en camino - Nexus", html);
     }
 }

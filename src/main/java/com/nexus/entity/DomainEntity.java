@@ -1,34 +1,14 @@
 package com.nexus.entity;
 
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.MappedSuperclass; 
-import jakarta.persistence.Version;
+import jakarta.persistence.*;
 
+@MappedSuperclass
+public abstract class DomainEntity {
 
-@MappedSuperclass 
-public class DomainEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE) // ✅ CORREGIDO: Mejor para TABLE_PER_CLASS
-    private int id;
-    
-    @Version
-    private int version;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
 
-    public DomainEntity() {
-        super();
-    }
-    
-    public DomainEntity(int id, int version) {
-        super();
-        this.id = id;
-        this.version = version;
-    }
-
-    // Getters y Setters 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public int getVersion() { return version; }
-    public void setVersion(int version) { this.version = version; }
+    public Integer getId()          { return id; }
+    public void    setId(Integer i) { this.id = i; }
 }

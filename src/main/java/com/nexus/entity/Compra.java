@@ -1,86 +1,102 @@
 package com.nexus.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
-/**
- * Entidad de compra actualizada con soporte para:
- *  - Sistema escrow (fondos retenidos hasta confirmación)
- *  - Venta en persona o por envío
- *  - Referencia al Stripe PaymentIntent para operaciones de reembolso
- */
 @Entity
+@Table(name = "compra", indexes = {
+    @Index(name = "idx_compra_comprador", columnList = "comprador_id"),
+    @Index(name = "idx_compra_estado",    columnList = "estado")
+})
 public class Compra extends DomainEntity {
 
-    @NotNull
-    private LocalDateTime fechaCompra;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "comprador_id", nullable = false)
+    private Usuario comprador;
 
-    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "producto_id", nullable = false)
+    private Producto producto;
+
     @Enumerated(EnumType.STRING)
-    private EstadoCompra estado;
+    @Column(nullable = false)
+    private EstadoCompra estado = EstadoCompra.PENDIENTE;
+
+    @Column(name = "stripe_payment_intent_id")
+    private String stripePaymentIntentId;
+
+    @Column(nullable = false)
+    private Double precioFinal = 0.0;
+
+    private Double precioEnvio = 0.0;
 
     @Enumerated(EnumType.STRING)
     private MetodoEntrega metodoEntrega;
 
-    @ManyToOne
-    @JoinColumn(name = "comprador_id")
-    private Usuario comprador;
+    // Copia de la direccion en el momento de la compra
+    private String dirNombre;
+    private String dirCalle;
+    private String dirCiudad;
+    private String dirCodigoPostal;
+    private String dirPais;
+    private String dirTelefono;
 
-    @ManyToOne
-    @JoinColumn(name = "producto_id")
-    private Producto producto;
-
-    // PaymentIntent de Stripe: necesario para capturar o reembolsar
-    private String stripePaymentIntentId;
-
-    // Precio final pactado (puede diferir del precio original si hubo propuesta de precio)
-    private Double precioFinal;
-
-    // Fechas de transición de estado
+    private LocalDateTime fechaCompra;
     private LocalDateTime fechaPago;
     private LocalDateTime fechaEnvio;
     private LocalDateTime fechaEntrega;
     private LocalDateTime fechaCompletada;
+    private LocalDateTime fechaCancelacion;
 
-    public Compra() {
-        super();
-        this.fechaCompra = LocalDateTime.now();
-        this.estado = EstadoCompra.PENDIENTE;
+    @PrePersist
+    protected void onCreate() {
+        if (fechaCompra == null) fechaCompra = LocalDateTime.now();
+        if (estado      == null) estado      = EstadoCompra.PENDIENTE;
     }
 
-    // ── Getters y Setters ──────────────────────────────────────────────────
+    public Usuario   getComprador()                            { return comprador; }
+    public void      setComprador(Usuario c)                   { this.comprador = c; }
+    public Producto  getProducto()                             { return producto; }
+    public void      setProducto(Producto p)                   { this.producto = p; }
 
-    public LocalDateTime getFechaCompra() { return fechaCompra; }
-    public void setFechaCompra(LocalDateTime fechaCompra) { this.fechaCompra = fechaCompra; }
+    /** Acceso directo al vendedor = publicador del producto */
+    @Transient
+    public Actor getVendedor() {
+        return (producto != null) ? producto.getPublicador() : null;
+    }
 
-    public EstadoCompra getEstado() { return estado; }
-    public void setEstado(EstadoCompra estado) { this.estado = estado; }
-
-    public MetodoEntrega getMetodoEntrega() { return metodoEntrega; }
-    public void setMetodoEntrega(MetodoEntrega metodoEntrega) { this.metodoEntrega = metodoEntrega; }
-
-    public Usuario getComprador() { return comprador; }
-    public void setComprador(Usuario comprador) { this.comprador = comprador; }
-
-    public Producto getProducto() { return producto; }
-    public void setProducto(Producto producto) { this.producto = producto; }
-
-    public String getStripePaymentIntentId() { return stripePaymentIntentId; }
-    public void setStripePaymentIntentId(String id) { this.stripePaymentIntentId = id; }
-
-    public Double getPrecioFinal() { return precioFinal; }
-    public void setPrecioFinal(Double precioFinal) { this.precioFinal = precioFinal; }
-
-    public LocalDateTime getFechaPago() { return fechaPago; }
-    public void setFechaPago(LocalDateTime fechaPago) { this.fechaPago = fechaPago; }
-
-    public LocalDateTime getFechaEnvio() { return fechaEnvio; }
-    public void setFechaEnvio(LocalDateTime fechaEnvio) { this.fechaEnvio = fechaEnvio; }
-
-    public LocalDateTime getFechaEntrega() { return fechaEntrega; }
-    public void setFechaEntrega(LocalDateTime fechaEntrega) { this.fechaEntrega = fechaEntrega; }
-
-    public LocalDateTime getFechaCompletada() { return fechaCompletada; }
-    public void setFechaCompletada(LocalDateTime fechaCompletada) { this.fechaCompletada = fechaCompletada; }
+    public EstadoCompra getEstado()                            { return estado; }
+    public void      setEstado(EstadoCompra e)                 { this.estado = e; }
+    public String    getStripePaymentIntentId()                { return stripePaymentIntentId; }
+    public void      setStripePaymentIntentId(String s)        { this.stripePaymentIntentId = s; }
+    public Double    getPrecioFinal()                          { return precioFinal; }
+    public void      setPrecioFinal(Double p)                  { this.precioFinal = p; }
+    public Double    getPrecioEnvio()                          { return precioEnvio; }
+    public void      setPrecioEnvio(Double p)                  { this.precioEnvio = p; }
+    public MetodoEntrega getMetodoEntrega()                    { return metodoEntrega; }
+    public void      setMetodoEntrega(MetodoEntrega m)         { this.metodoEntrega = m; }
+    public String    getDirNombre()                            { return dirNombre; }
+    public void      setDirNombre(String v)                    { this.dirNombre = v; }
+    public String    getDirCalle()                             { return dirCalle; }
+    public void      setDirCalle(String v)                     { this.dirCalle = v; }
+    public String    getDirCiudad()                            { return dirCiudad; }
+    public void      setDirCiudad(String v)                    { this.dirCiudad = v; }
+    public String    getDirCodigoPostal()                      { return dirCodigoPostal; }
+    public void      setDirCodigoPostal(String v)              { this.dirCodigoPostal = v; }
+    public String    getDirPais()                              { return dirPais; }
+    public void      setDirPais(String v)                      { this.dirPais = v; }
+    public String    getDirTelefono()                          { return dirTelefono; }
+    public void      setDirTelefono(String v)                  { this.dirTelefono = v; }
+    public LocalDateTime getFechaCompra()                      { return fechaCompra; }
+    public void      setFechaCompra(LocalDateTime f)           { this.fechaCompra = f; }
+    public LocalDateTime getFechaPago()                        { return fechaPago; }
+    public void      setFechaPago(LocalDateTime f)             { this.fechaPago = f; }
+    public LocalDateTime getFechaEnvio()                       { return fechaEnvio; }
+    public void      setFechaEnvio(LocalDateTime f)            { this.fechaEnvio = f; }
+    public LocalDateTime getFechaEntrega()                     { return fechaEntrega; }
+    public void      setFechaEntrega(LocalDateTime f)          { this.fechaEntrega = f; }
+    public LocalDateTime getFechaCompletada()                  { return fechaCompletada; }
+    public void      setFechaCompletada(LocalDateTime f)       { this.fechaCompletada = f; }
+    public LocalDateTime getFechaCancelacion()                 { return fechaCancelacion; }
+    public void      setFechaCancelacion(LocalDateTime f)      { this.fechaCancelacion = f; }
 }

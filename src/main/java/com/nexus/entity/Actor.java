@@ -1,70 +1,79 @@
 package com.nexus.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
+/**
+ * Clase base para Usuario, Empresa y Admin.
+ * Usa herencia JOINED: tabla actor + tabla especifica.
+ */
 @Entity
-@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS) // ✅ CORREGIDO: Evita problemas de FK
+@Table(name = "actor")
+@Inheritance(strategy = InheritanceType.JOINED)
 public abstract class Actor extends DomainEntity {
 
-    @NotBlank
-    @Column(unique = true)
-    protected String username;
+    @Column(nullable = false, unique = true)
+    private String user;
 
-    @Email
-    @NotBlank
-    @Column(unique = true)
-    protected String email;
+    @Column(nullable = false, unique = true)
+    private String email;
 
-    @NotBlank
-    protected String password;
+    @Column(nullable = false)
+    private String password;
 
-    protected LocalDateTime fechaRegistro;
-    
-    // Campo interno para lógica de registro (no sale en el UML pero es necesario)
-    @JsonIgnore
-    protected String codigoVerificacion;
+    // ---- 2FA -----------------------------------------------------------
+    @Column(nullable = false)
+    private boolean twoFactorEnabled = false;
 
-    // RELACIÓN: 1 Actor publica 0..* Ofertas
-    @OneToMany(mappedBy = "actor", cascade = CascadeType.ALL)
-    @JsonIgnore
-    protected List<Oferta> ofertasPublicadas = new ArrayList<>();
+    private String twoFactorMethod;  // "TOTP" o "EMAIL"
+    private String twoFactorSecret;  // Secret TOTP (encriptado)
 
-    // RELACIÓN: 1 Actor comenta 0..* Comentarios
-    @OneToMany(mappedBy = "actor", cascade = CascadeType.ALL)
-    @JsonIgnore
-    protected List<Comentario> comentariosRealizados = new ArrayList<>();
+    // ---- Sesiones -------------------------------------------------------
+    /** Incrementar para invalidar todos los JWT activos */
+    @Column(nullable = false)
+    private int jwtVersion = 0;
 
-    public Actor() {
-        super();
-        this.fechaRegistro = LocalDateTime.now();
+    // ---- Estado de la cuenta --------------------------------------------
+    @Column(nullable = false)
+    private boolean cuentaEliminada = false;
+
+    @Column(nullable = false)
+    private boolean cuentaVerificada = false;
+
+    private LocalDateTime fechaRegistro;
+
+    // ---- Notificaciones -------------------------------------------------
+    @Embedded
+    private ActorNotificacionConfig notificacionConfig = new ActorNotificacionConfig();
+
+    @PrePersist
+    protected void onActorCreate() {
+        if (fechaRegistro == null) fechaRegistro = LocalDateTime.now();
+        if (notificacionConfig == null) notificacionConfig = new ActorNotificacionConfig();
     }
 
-    // Getters y Setters
-    public String getUser() { return username; }
-    public void setUser(String user) { this.username = user; }
+    // ---- Getters / Setters -----------------------------------------------
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
-
-    public LocalDateTime getFechaRegistro() { return fechaRegistro; }
-    public void setFechaRegistro(LocalDateTime fechaRegistro) { this.fechaRegistro = fechaRegistro; }
-
-    public String getCodigoVerificacion() { return codigoVerificacion; }
-    public void setCodigoVerificacion(String codigoVerificacion) { this.codigoVerificacion = codigoVerificacion; }
-
-    public List<Oferta> getOfertasPublicadas() { return ofertasPublicadas; }
-    public void setOfertasPublicadas(List<Oferta> ofertasPublicadas) { this.ofertasPublicadas = ofertasPublicadas; }
-
-    public List<Comentario> getComentariosRealizados() { return comentariosRealizados; }
-    public void setComentariosRealizados(List<Comentario> comentariosRealizados) { this.comentariosRealizados = comentariosRealizados; }
+    public String  getUser()                                  { return user; }
+    public void    setUser(String u)                          { this.user = u; }
+    public String  getEmail()                                 { return email; }
+    public void    setEmail(String e)                         { this.email = e; }
+    public String  getPassword()                              { return password; }
+    public void    setPassword(String p)                      { this.password = p; }
+    public boolean isTwoFactorEnabled()                       { return twoFactorEnabled; }
+    public void    setTwoFactorEnabled(boolean b)             { this.twoFactorEnabled = b; }
+    public String  getTwoFactorMethod()                       { return twoFactorMethod; }
+    public void    setTwoFactorMethod(String m)               { this.twoFactorMethod = m; }
+    public String  getTwoFactorSecret()                       { return twoFactorSecret; }
+    public void    setTwoFactorSecret(String s)               { this.twoFactorSecret = s; }
+    public int     getJwtVersion()                            { return jwtVersion; }
+    public void    setJwtVersion(int v)                       { this.jwtVersion = v; }
+    public boolean isCuentaEliminada()                        { return cuentaEliminada; }
+    public void    setCuentaEliminada(boolean b)              { this.cuentaEliminada = b; }
+    public boolean isCuentaVerificada()                       { return cuentaVerificada; }
+    public void    setCuentaVerificada(boolean b)             { this.cuentaVerificada = b; }
+    public LocalDateTime getFechaRegistro()                   { return fechaRegistro; }
+    public void    setFechaRegistro(LocalDateTime f)          { this.fechaRegistro = f; }
+    public ActorNotificacionConfig getNotificacionConfig()    { return notificacionConfig; }
+    public void    setNotificacionConfig(ActorNotificacionConfig c) { this.notificacionConfig = c; }
 }

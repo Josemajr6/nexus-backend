@@ -1,24 +1,18 @@
 package com.nexus.entity;
 
-import jakarta.persistence.Entity;
+import jakarta.persistence.*;
 
 @Entity
-public class Admin extends Actor { // <--- CAMBIO: Extends Actor
+@Table(name = "admin")
+@PrimaryKeyJoinColumn(name = "actor_id")
+public class Admin extends Actor {
 
-    private int nivelAcceso;
+    /** 1 = moderador, 2 = admin completo, 3 = superadmin */
+    @Column(name = "nivel_acceso", nullable = false)
+    private Integer nivelAcceso = 1;
 
-    public Admin() {
-        super();
-    }
+    public Admin() {}
 
-    public Admin(String user, String email, String password, int nivelAcceso) {
-        super();
-        this.username = user;
-        this.email = email;
-        this.password = password;
-        this.nivelAcceso = nivelAcceso;
-    }
-
-    public int getNivelAcceso() { return nivelAcceso; }
-    public void setNivelAcceso(int nivelAcceso) { this.nivelAcceso = nivelAcceso; }
+    public Integer getNivelAcceso()          { return nivelAcceso; }
+    public void    setNivelAcceso(Integer n) { this.nivelAcceso = n; }
 }

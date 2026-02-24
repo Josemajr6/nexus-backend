@@ -16,75 +16,109 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfiguration {
 
-    @Autowired private JWTAuthenticationFilter jwtAuthenticationFilter;
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration c) throws Exception {
-        return c.getAuthenticationManager();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+    @Autowired
+    private JWTAuthenticationFilter jwtFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(request -> {
-                CorsConfiguration c = new CorsConfiguration();
-                c.setAllowedOrigins(List.of(
-                    "http://localhost:4200", "http://localhost:4201",
-                    "https://nexus-app.es", "https://www.nexus-app.es"));
-                c.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-                c.setAllowedHeaders(List.of("*"));
-                c.setAllowCredentials(true);
-                return c;
-            }))
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
-            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // ── Públicas ──────────────────────────────────────────
+
+                // ---- Swagger (solo en dev) --------------------------------
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+
+                // ---- WebSocket -------------------------------------------
+                .requestMatchers("/ws/**").permitAll()
+
+                // ---- Auth ------------------------------------------------
                 .requestMatchers("/auth/**").permitAll()
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers("/ws/**").permitAll()          // SockJS handshake HTTP
-                .requestMatchers(HttpMethod.GET, "/producto",   "/producto/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/vehiculo",   "/vehiculo/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/oferta",     "/oferta/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/votos/**").permitAll()
 
-                // ── Admin ─────────────────────────────────────────────
-                .requestMatchers("/admin/**").hasAuthority("ADMIN")
-                .requestMatchers("/envio/reembolsar/**").hasAuthority("ADMIN")
+                // ---- Newsletter (suscribir, confirmar y baja son publicos) --
+                .requestMatchers(HttpMethod.POST, "/newsletter/suscribir").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/newsletter/confirmar").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/newsletter/baja").permitAll()
+                .requestMatchers("/newsletter/**").authenticated()
 
-                // ── Empresa ───────────────────────────────────────────
-                .requestMatchers("/empresa/**").hasAuthority("EMPRESA")
+                // ---- Categorias (lectura publica, escritura admin) --------
+                .requestMatchers(HttpMethod.GET, "/categorias/**").permitAll()
+                .requestMatchers("/categorias/**").hasAuthority("ADMIN")
 
-                // ── Productos y vehículos (escritura) ─────────────────
-                .requestMatchers(HttpMethod.POST,   "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
-                .requestMatchers(HttpMethod.PUT,    "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
-                .requestMatchers(HttpMethod.PATCH,  "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
-                .requestMatchers(HttpMethod.DELETE, "/producto/**").hasAnyAuthority("EMPRESA","USUARIO")
-                .requestMatchers(HttpMethod.POST,   "/vehiculo/**").hasAuthority("USUARIO")
-                .requestMatchers(HttpMethod.PUT,    "/vehiculo/**").hasAuthority("USUARIO")
-                .requestMatchers(HttpMethod.DELETE, "/vehiculo/**").hasAuthority("USUARIO")
+                // ---- Ofertas (lectura publica, escritura autenticada) -----
+                .requestMatchers(HttpMethod.GET, "/oferta/**").permitAll()
+                .requestMatchers("/oferta/**").authenticated()
 
-                // ── Chat, Compras, Envíos, Devoluciones, Ajustes ─────
-                .requestMatchers("/chat/**").authenticated()
-                .requestMatchers("/compra/**").hasAnyAuthority("USUARIO","ADMIN")
-                .requestMatchers("/envio/**").hasAnyAuthority("USUARIO","ADMIN")
-                .requestMatchers("/devolucion/**").hasAnyAuthority("USUARIO","ADMIN")
+                // ---- Productos (lectura publica) -------------------------
+                .requestMatchers(HttpMethod.GET, "/producto/**").permitAll()
+                .requestMatchers("/producto/**").authenticated()
+
+                // ---- Vehiculos (lectura publica) -------------------------
+                .requestMatchers(HttpMethod.GET, "/vehiculo/**").permitAll()
+                .requestMatchers("/vehiculo/**").authenticated()
+
+                // ---- Usuarios (perfil publico, resto autenticado) --------
+                .requestMatchers(HttpMethod.GET, "/usuario/*/perfil").permitAll()
+                .requestMatchers("/usuario/**").authenticated()
+
+                // ---- Notificaciones, ajustes, compras, envios... ---------
+                .requestMatchers("/notificaciones/**").authenticated()
                 .requestMatchers("/ajustes/**").authenticated()
-                .requestMatchers("/votos/**").authenticated()
+                .requestMatchers("/compra/**").authenticated()
+                .requestMatchers("/envio/**").authenticated()
+                .requestMatchers("/devolucion/**").authenticated()
+                .requestMatchers("/valoracion/**").authenticated()
+                .requestMatchers("/chat/**").authenticated()
+                .requestMatchers("/bloqueo/**").authenticated()
+                .requestMatchers("/reporte/**").authenticated()
+                .requestMatchers("/spark-voto/**").authenticated()
 
-                // ── Todo lo demás ─────────────────────────────────────
+                // ---- Admin -----------------------------------------------
+                .requestMatchers("/admin/**").hasAuthority("ADMIN")
+
+                // ---- El resto requiere autenticacion --------------------
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOriginPatterns(List.of(
+            "http://localhost:4200",
+            "http://localhost:3000",
+            "https://*.nexus.app"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg)
+            throws Exception {
+        return cfg.getAuthenticationManager();
     }
 }

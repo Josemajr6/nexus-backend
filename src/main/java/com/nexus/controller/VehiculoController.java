@@ -11,7 +11,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import com.nexus.entity.vehiculos.*;
+
+import com.nexus.entity.TipoVehiculo;
+import com.nexus.entity.Vehiculo;
 import com.nexus.service.StorageService;
 import com.nexus.service.VehiculoService;
 import io.swagger.v3.oas.annotations.Operation;

@@ -1,56 +1,64 @@
 package com.nexus.controller;
 
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.nexus.entity.Notificacion;
+import com.nexus.entity.NotificacionInApp;
 import com.nexus.service.NotificacionService;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+/**
+ * Panel de notificaciones (campana 🔔).
+ *
+ * Angular — badge de notificaciones:
+ *   // Suscribirse al WebSocket para actualizaciones en tiempo real:
+ *   client.subscribe(`/user/${userId}/queue/notificaciones`, msg => {
+ *     const { noLeidas } = JSON.parse(msg.body);
+ *     this.badgeCount = noLeidas;
+ *   });
+ *
+ *   // Al abrir el panel de notificaciones:
+ *   GET /notificaciones?receptorId=5&page=0&size=20
+ *
+ *   // Al marcar todo como leído:
+ *   PATCH /notificaciones/leer-todas?receptorId=5
+ */
 @RestController
-@RequestMapping("/notificacion")
-@Tag(name = "Notificaciones", description = "Gestión de notificaciones del usuario")
+@RequestMapping("/notificaciones")
+@Tag(name = "Notificaciones", description = "Campana 🔔 — sin Firebase, solo WebSocket + BD")
 public class NotificacionController {
 
-    @Autowired
-    private NotificacionService notificacionService;
+    @Autowired private NotificacionService notificacionService;
 
-    @GetMapping("/usuario/{usuarioId}")
-    @Operation(summary = "Ver todas las notificaciones de un usuario")
-    public ResponseEntity<List<Notificacion>> listar(@PathVariable Integer usuarioId) {
-        return ResponseEntity.ok(notificacionService.obtenerPorUsuario(usuarioId));
+    @GetMapping
+    @Operation(summary = "Listar notificaciones paginadas")
+    public ResponseEntity<Page<NotificacionInApp>> listar(
+            @RequestParam Integer receptorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(notificacionService.getNotificaciones(receptorId, page, size));
     }
-    
-    @GetMapping("/usuario/{usuarioId}/no-leidas")
-    @Operation(summary = "Ver notificaciones no leídas")
-    public ResponseEntity<List<Notificacion>> noLeidas(@PathVariable Integer usuarioId) {
-        return ResponseEntity.ok(notificacionService.obtenerNoLeidas(usuarioId));
+
+    @GetMapping("/no-leidas/{receptorId}")
+    @Operation(summary = "Número de notificaciones no leídas (para el badge)")
+    public ResponseEntity<Map<String, Long>> noLeidas(@PathVariable Integer receptorId) {
+        return ResponseEntity.ok(Map.of("noLeidas", notificacionService.getNoLeidas(receptorId)));
     }
-    
-    @GetMapping("/usuario/{usuarioId}/contador")
-    @Operation(summary = "Contar notificaciones no leídas")
-    public ResponseEntity<Map<String, Long>> contarNoLeidas(@PathVariable Integer usuarioId) {
-        long count = notificacionService.contarNoLeidas(usuarioId);
-        return ResponseEntity.ok(Map.of("noLeidas", count));
-    }
-    
-    @PutMapping("/{id}/leer")
-    @Operation(summary = "Marcar notificación como leída")
+
+    @PatchMapping("/{id}/leer")
     public ResponseEntity<?> marcarLeida(@PathVariable Integer id) {
-        notificacionService.marcarComoLeida(id);
+        notificacionService.marcarLeida(id);
         return ResponseEntity.ok(Map.of("mensaje", "Notificación marcada como leída"));
     }
-    
-    @PutMapping("/usuario/{usuarioId}/leer-todas")
-    @Operation(summary = "Marcar todas las notificaciones como leídas")
-    public ResponseEntity<?> marcarTodasLeidas(@PathVariable Integer usuarioId) {
-        notificacionService.marcarTodasComoLeidas(usuarioId);
+
+    @PatchMapping("/leer-todas")
+    public ResponseEntity<?> marcarTodasLeidas(@RequestParam Integer receptorId) {
+        notificacionService.marcarTodasLeidas(receptorId);
         return ResponseEntity.ok(Map.of("mensaje", "Todas las notificaciones marcadas como leídas"));
     }
 }

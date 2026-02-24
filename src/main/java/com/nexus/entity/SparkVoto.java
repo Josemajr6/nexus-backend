@@ -4,47 +4,67 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-    name = "spark_voto",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"usuario_id", "oferta_id"})
-)
+@Table(name = "spark_voto",
+       uniqueConstraints = @UniqueConstraint(
+           name = "uq_spark_voto",
+           columnNames = {"actor_id", "oferta_id", "producto_id"}))
 public class SparkVoto extends DomainEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_id", nullable = false)
-    private Usuario usuario;
+    @JoinColumn(name = "actor_id", nullable = false)
+    private Actor actor;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "oferta_id", nullable = false)
+    @JoinColumn(name = "oferta_id")
     private Oferta oferta;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "producto_id")
+    private Producto producto;
+
+    /** +1 = upvote (Spark), -1 = downvote (Drip) */
     @Column(nullable = false)
-    private Boolean esSpark; // true = ⚡ Spark, false = 💧 Drip
+    private Integer valor;
 
     private LocalDateTime fechaVoto;
 
+    /** Constructor por defecto (requerido por JPA) */
     public SparkVoto() {
-        super();
         this.fechaVoto = LocalDateTime.now();
     }
 
-    public SparkVoto(Usuario usuario, Oferta oferta, Boolean esSpark) {
+    /**
+     * Constructor para votar una Oferta.
+     * Usado en PopulateDB y OfertaService:
+     *   new SparkVoto(usuario, oferta, true)   -> Spark (+1)
+     *   new SparkVoto(usuario, oferta, false)  -> Drip  (-1)
+     *
+     * Acepta Actor en lugar de Usuario para no forzar un cast en el servicio,
+     * pero en la practica siempre sera un Usuario o Empresa.
+     */
+    public SparkVoto(Actor actor, Oferta oferta, boolean esSpark) {
         this();
-        this.usuario = usuario;
+        this.actor  = actor;
         this.oferta = oferta;
-        this.esSpark = esSpark;
+        this.valor  = esSpark ? 1 : -1;
     }
 
-    // Getters y Setters
-    public Usuario getUsuario() { return usuario; }
-    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+    /** Constructor para votar un Producto */
+    public SparkVoto(Actor actor, Producto producto, boolean esSpark) {
+        this();
+        this.actor    = actor;
+        this.producto = producto;
+        this.valor    = esSpark ? 1 : -1;
+    }
 
-    public Oferta getOferta() { return oferta; }
-    public void setOferta(Oferta oferta) { this.oferta = oferta; }
-
-    public Boolean getEsSpark() { return esSpark; }
-    public void setEsSpark(Boolean esSpark) { this.esSpark = esSpark; }
-
-    public LocalDateTime getFechaVoto() { return fechaVoto; }
-    public void setFechaVoto(LocalDateTime fechaVoto) { this.fechaVoto = fechaVoto; }
+    public Actor    getActor()                        { return actor; }
+    public void     setActor(Actor a)                 { this.actor = a; }
+    public Oferta   getOferta()                       { return oferta; }
+    public void     setOferta(Oferta o)               { this.oferta = o; }
+    public Producto getProducto()                     { return producto; }
+    public void     setProducto(Producto p)           { this.producto = p; }
+    public Integer  getValor()                        { return valor; }
+    public void     setValor(Integer v)               { this.valor = v; }
+    public LocalDateTime getFechaVoto()               { return fechaVoto; }
+    public void     setFechaVoto(LocalDateTime f)     { this.fechaVoto = f; }
 }

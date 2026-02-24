@@ -1,22 +1,26 @@
 package com.nexus.repository;
 
 import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+import com.nexus.entity.NotificacionInApp;
 
-import com.nexus.entity.Notificacion;
+public interface NotificacionRepository extends JpaRepository<NotificacionInApp, Integer> {
 
-@Repository
-public interface NotificacionRepository extends JpaRepository<Notificacion, Integer> {
-    
-    @Query("SELECT n FROM Notificacion n WHERE n.usuario.id = ?1 ORDER BY n.fechaCreacion DESC")
-    List<Notificacion> findByUsuarioId(Integer usuarioId);
-    
-    @Query("SELECT n FROM Notificacion n WHERE n.usuario.id = ?1 AND n.leida = false ORDER BY n.fechaCreacion DESC")
-    List<Notificacion> findNoLeidasByUsuarioId(Integer usuarioId);
-    
-    @Query("SELECT COUNT(n) FROM Notificacion n WHERE n.usuario.id = ?1 AND n.leida = false")
-    long countNoLeidasByUsuarioId(Integer usuarioId);
+    Page<NotificacionInApp> findByReceptorIdOrderByFechaCreacionDesc(Integer receptorId, Pageable pageable);
+
+    @Query("SELECT COUNT(n) FROM NotificacionInApp n WHERE n.receptor.id = ?1 AND n.leida = false")
+    long countNoLeidasByReceptorId(Integer receptorId);
+
+    @Modifying @Transactional
+    @Query("UPDATE NotificacionInApp n SET n.leida = true WHERE n.receptor.id = ?1")
+    void marcarTodasLeidasByReceptorId(Integer receptorId);
+
+    @Modifying @Transactional
+    @Query("UPDATE NotificacionInApp n SET n.leida = true WHERE n.id = ?1")
+    void marcarLeidaById(Integer notificacionId);
 }
