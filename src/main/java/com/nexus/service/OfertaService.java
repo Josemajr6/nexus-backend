@@ -23,89 +23,86 @@ public class OfertaService {
     @Autowired private OfertaRepository    ofertaRepository;
     @Autowired private ActorRepository     actorRepository;
     @Autowired private SparkVotoRepository sparkVotoRepository;
+    @Autowired private CategoriaRepository categoriaRepository;
     @Autowired private StorageService      storageService;
+    @Autowired private NotificacionService notificacionService;
 
-    // ---- CRUD basico (usado directamente por OfertaController) -----------
+    // ---- CRUD ----------------------------------------------------------
 
-    public List<Oferta> findAll() {
-        return ofertaRepository.findAll(Sort.by(Sort.Direction.DESC, "fechaPublicacion"));
-    }
-
-    public Optional<Oferta> findById(Integer id) {
-        return ofertaRepository.findById(id);
-    }
+    public List<Oferta>    findAll()                   { return ofertaRepository.findAll(Sort.by(Sort.Direction.DESC, "fechaPublicacion")); }
+    public Optional<Oferta> findById(Integer id)       { return ofertaRepository.findById(id); }
+    public Oferta findByIdOrThrow(Integer id)          { return ofertaRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Oferta no encontrada: " + id)); }
 
     @Transactional
     public Oferta save(Oferta oferta) {
-        if (oferta.getFechaPublicacion() == null)
-            oferta.setFechaPublicacion(LocalDateTime.now());
+        if (oferta.getFechaPublicacion() == null) oferta.setFechaPublicacion(LocalDateTime.now());
         oferta.actualizarBadge();
         return ofertaRepository.save(oferta);
     }
 
     @Transactional
-    public void deleteById(Integer id) {
-        ofertaRepository.deleteById(id);
+    public void deleteById(Integer id) { ofertaRepository.deleteById(id); }
+
+    // ---- Crear con imagenes y categoria --------------------------------
+
+    @Transactional
+    public Oferta crear(Oferta oferta, Integer actorId, List<MultipartFile> imagenes) {
+        Actor actor = actorRepository.findById(actorId)
+            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+        oferta.setActor(actor);
+        oferta.setFechaPublicacion(LocalDateTime.now());
+        oferta.setEsActiva(true);
+        if (oferta.getSparkCount() == null) oferta.setSparkCount(0);
+        if (oferta.getDripCount()  == null) oferta.setDripCount(0);
+
+        if (imagenes != null) {
+            for (MultipartFile img : imagenes) {
+                String url = storageService.subirImagen(img);
+                if (url != null) {
+                    if (oferta.getImagenPrincipal() == null) oferta.setImagenPrincipal(url);
+                    else oferta.addImagenGaleria(url);
+                }
+            }
+        }
+        oferta.actualizarBadge();
+        Oferta guardada = ofertaRepository.save(oferta);
+        notificacionService.notificarSparkEnOferta(actorId, guardada.getTitulo());
+        return guardada;
     }
 
-    // ---- Listados especiales (usados por OfertaController) ---------------
-
-    public List<Oferta> getActivas() {
-        return ofertaRepository.findByEsActivaTrue();
+    /**
+     * Resolver categoria por nombre y asignarla.
+     * Usar esto en lugar de oferta.setCategoria("Electronica")
+     */
+    @Transactional
+    public void setCategoriaByNombre(Oferta oferta, String nombre) {
+        if (nombre == null || nombre.isBlank()) return;
+        categoriaRepository.findByNombre(nombre)
+            .or(() -> categoriaRepository.findBySlug(
+                nombre.toLowerCase().replaceAll("[^a-z0-9]", "-")))
+            .ifPresent(oferta::setCategoria);
     }
 
-    public List<Oferta> obtenerDestacadas() {
-        return ofertaRepository.findDestacadas(
-            LocalDateTime.now().minusDays(7), PageRequest.of(0, 20));
-    }
+    // ---- Listados especiales -------------------------------------------
 
-    public List<Oferta> obtenerTrending() {
-        return ofertaRepository.findTrending(
-            LocalDateTime.now().minusHours(24), PageRequest.of(0, 20));
-    }
+    public List<Oferta> obtenerDestacadas()       { return ofertaRepository.findDestacadas(LocalDateTime.now().minusDays(7), PageRequest.of(0, 20)); }
+    public List<Oferta> obtenerTrending()         { return ofertaRepository.findTrending(LocalDateTime.now().minusHours(24), PageRequest.of(0, 20)); }
+    public List<Oferta> obtenerTopSpark()         { return ofertaRepository.findTopBySparkScore(PageRequest.of(0, 20)); }
+    public List<Oferta> obtenerProximasExpirar()  { return ofertaRepository.findProximasExpirar(LocalDateTime.now(), LocalDateTime.now().plusHours(24)); }
+    public List<Oferta> getRecientes(int limite)  { return ofertaRepository.findRecientes(PageRequest.of(0, limite)); }
+    public List<Oferta> getByCategoria(String c)  { return ofertaRepository.findByCategoria(c); }
+    public List<Oferta> getByBadge(BadgeOferta b) { return ofertaRepository.findByBadgeAndEsActivaTrue(b); }
+    public List<Oferta> buscarTexto(String q)     { return ofertaRepository.buscarPorTexto(q); }
+    public List<Oferta> getByActorId(Integer id)  { return ofertaRepository.findByActorId(id); }
 
-    public List<Oferta> obtenerTopSpark() {
-        return ofertaRepository.findTopBySparkScore(PageRequest.of(0, 20));
-    }
+    // ---- Busqueda con filtros ------------------------------------------
 
-    public List<Oferta> obtenerProximasExpirar() {
-        return ofertaRepository.findProximasExpirar(
-            LocalDateTime.now(), LocalDateTime.now().plusHours(24));
-    }
-
-    public List<Oferta> getRecientes(int limite) {
-        return ofertaRepository.findRecientes(PageRequest.of(0, limite));
-    }
-
-    public List<Oferta> getByCategoria(String categoria) {
-        return ofertaRepository.findByCategoria(categoria);
-    }
-
-    public List<Oferta> getByBadge(BadgeOferta badge) {
-        return ofertaRepository.findByBadgeAndEsActivaTrue(badge);
-    }
-
-    public List<Oferta> buscarTexto(String q) {
-        return ofertaRepository.buscarPorTexto(q);
-    }
-
-    public List<Oferta> getByActorId(Integer actorId) {
-        return ofertaRepository.findByActorId(actorId);
-    }
-
-    // ---- Busqueda con filtros (firma exacta que usa OfertaController) -----
-    //
-    // OfertaController llama con:
-    //   buscarConFiltros(categoria, tienda, precioMin, precioMax,
-    //                    busqueda, soloActivas, sortField, sortDir, pageable)
-    //
     public Page<Oferta> buscarConFiltros(String categoria, String tienda,
                                           Double precioMin, Double precioMax,
                                           String busqueda, Boolean soloActivas,
                                           String sortField, String sortDir,
                                           Pageable pageable) {
         boolean solo = Boolean.TRUE.equals(soloActivas);
-
         if (!pageable.getSort().isSorted() && sortField != null && !sortField.isBlank()) {
             Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(Sort.Direction.ASC,  sortField)
@@ -116,7 +113,6 @@ public class OfertaService {
             categoria, tienda, precioMin, precioMax, busqueda, solo, pageable);
     }
 
-    // Overload conveniente sin sortField/sortDir (para llamadas internas)
     public Page<Oferta> buscarConFiltros(String categoria, String tienda,
                                           Double precioMin, Double precioMax,
                                           String busqueda, boolean soloActivas,
@@ -126,51 +122,43 @@ public class OfertaService {
             PageRequest.of(page, size));
     }
 
-    // ---- Interacciones (usadas por OfertaController) ---------------------
+    // ---- Interacciones -------------------------------------------------
 
     @Transactional
-    public void incrementarVistas(Integer ofertaId) {
-        ofertaRepository.findById(ofertaId).ifPresent(o -> {
+    public void incrementarVistas(Integer id) {
+        ofertaRepository.findById(id).ifPresent(o -> {
             o.setNumeroVistas(o.getNumeroVistas() != null ? o.getNumeroVistas() + 1 : 1);
             ofertaRepository.save(o);
         });
     }
 
     @Transactional
-    public void incrementarCompartidos(Integer ofertaId) {
-        ofertaRepository.findById(ofertaId).ifPresent(o -> {
+    public void incrementarCompartidos(Integer id) {
+        ofertaRepository.findById(id).ifPresent(o -> {
             o.setNumeroCompartidos(o.getNumeroCompartidos() != null ? o.getNumeroCompartidos() + 1 : 1);
             ofertaRepository.save(o);
         });
     }
 
-    // ---- Votos (usado por OfertaController: votarOferta(actorId, ofertaId, isUpvote)) --
+    // ---- Votos ---------------------------------------------------------
 
     @Transactional
     public int votarOferta(Integer actorId, Integer ofertaId, Boolean isUpvote) {
         int valor = Boolean.TRUE.equals(isUpvote) ? 1 : -1;
-        Oferta oferta = ofertaRepository.findById(ofertaId)
-            .orElseThrow(() -> new IllegalArgumentException("Oferta no encontrada"));
-        Actor actor = actorRepository.findById(actorId)
+        Oferta oferta = findByIdOrThrow(ofertaId);
+        Actor  actor  = actorRepository.findById(actorId)
             .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
 
         Optional<SparkVoto> prev = sparkVotoRepository.findByActorIdAndOfertaId(actorId, ofertaId);
         if (prev.isPresent()) {
             SparkVoto v = prev.get();
             if (v.getValor() == valor) {
-                // Toggle: quitar voto
                 if (valor == 1) oferta.setSparkCount(Math.max(0, oferta.getSparkCount() - 1));
-                else            oferta.setDripCount(Math.max(0, oferta.getDripCount() - 1));
+                else            oferta.setDripCount(Math.max(0,  oferta.getDripCount()  - 1));
                 sparkVotoRepository.deleteByActorAndOferta(actorId, ofertaId);
             } else {
-                // Cambiar voto
-                if (valor == 1) {
-                    oferta.setSparkCount(oferta.getSparkCount() + 1);
-                    oferta.setDripCount(Math.max(0, oferta.getDripCount() - 1));
-                } else {
-                    oferta.setDripCount(oferta.getDripCount() + 1);
-                    oferta.setSparkCount(Math.max(0, oferta.getSparkCount() - 1));
-                }
+                if (valor == 1) { oferta.setSparkCount(oferta.getSparkCount() + 1); oferta.setDripCount(Math.max(0, oferta.getDripCount() - 1)); }
+                else            { oferta.setDripCount(oferta.getDripCount() + 1);   oferta.setSparkCount(Math.max(0, oferta.getSparkCount() - 1)); }
                 v.setValor(valor);
                 sparkVotoRepository.save(v);
             }
@@ -183,46 +171,12 @@ public class OfertaService {
         return oferta.getSparkScore();
     }
 
-    // ---- Crear con imagenes ----------------------------------------------
+    // ---- Meta-datos -------------------------------------------------------
 
-    @Transactional
-    public Oferta crear(Oferta oferta, Integer actorId, List<MultipartFile> imagenes) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        oferta.setActor(actor);
-        oferta.setFechaPublicacion(LocalDateTime.now());
-        oferta.setEsActiva(true);
-        oferta.setSparkCount(0);
-        oferta.setDripCount(0);
-
-        if (imagenes != null) {
-            for (MultipartFile img : imagenes) {
-                String url = storageService.subirImagen(img);
-                if (url != null) {
-                    if (oferta.getImagenPrincipal() == null) oferta.setImagenPrincipal(url);
-                    else oferta.addImagenGaleria(url);
-                }
-            }
-        }
-        oferta.actualizarBadge();
-        return ofertaRepository.save(oferta);
-    }
-
-    // ---- Meta-datos para los filtros del frontend ------------------------
-
-    public List<String> getCategorias() { return ofertaRepository.findCategoriasDistintas(); }
-    public List<String> getTiendas()    { return ofertaRepository.findTiendasDistintas(); }
-
+    public List<String>        getCategorias()   { return ofertaRepository.findCategoriasDistintas(); }
+    public List<String>        getTiendas()      { return ofertaRepository.findTiendasDistintas(); }
     public Map<String, Object> getEstadisticas() {
-        return Map.of(
-            "totalActivas", ofertaRepository.countActivas(),
-            "categorias",   getCategorias(),
-            "tiendas",      getTiendas()
-        );
-    }
-
-    public Oferta findByIdOrThrow(Integer id) {
-        return ofertaRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Oferta no encontrada: " + id));
+        return Map.of("totalActivas", ofertaRepository.countActivas(),
+                      "categorias",  getCategorias(), "tiendas", getTiendas());
     }
 }

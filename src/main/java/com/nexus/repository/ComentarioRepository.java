@@ -1,13 +1,11 @@
 package com.nexus.repository;
-
-import java.util.List;
-
+import com.nexus.entity.Comentario;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import com.nexus.entity.Comentario;
-import com.nexus.entity.Oferta;
-
+import java.util.List;
 @Repository
-public interface ComentarioRepository extends JpaRepository<Comentario, Integer>{
+public interface ComentarioRepository extends JpaRepository<Comentario, Integer> {
+    List<Comentario> findByProductoIdOrderByFechaDesc(Integer productoId);
+    List<Comentario> findByActorIdOrderByFechaDesc(Integer actorId);
+    long countByProductoId(Integer productoId);
 }

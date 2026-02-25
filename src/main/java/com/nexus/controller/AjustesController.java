@@ -12,44 +12,23 @@ import com.nexus.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-/**
- * Ajustes del usuario autenticado.
- * Cada seccion corresponde a una pagina de ajustes en Angular.
- *
- * Secciones:
- *   /ajustes/perfil           -> datos personales (nombre, bio, avatar...)
- *   /ajustes/cuenta           -> email, username, contrasena
- *   /ajustes/privacidad       -> visibilidad del perfil
- *   /ajustes/notificaciones   -> preferencias de notificacion in-app y email
- *   /ajustes/newsletter       -> suscripcion al newsletter
- *   /ajustes/2fa/totp/setup   -> configurar Google Authenticator
- *   /ajustes/2fa/totp/activar -> confirmar codigo TOTP
- *   /ajustes/2fa/email/activar-> activar 2FA por email
- *   /ajustes/2fa/desactivar   -> desactivar 2FA
- *   /ajustes/sesiones         -> cerrar todas las sesiones
- *   /ajustes/cuenta/eliminar  -> eliminar cuenta (RGPD art. 17)
- */
 @RestController
 @RequestMapping("/ajustes")
 @Tag(name = "Ajustes", description = "Configuracion del usuario autenticado")
 public class AjustesController {
 
-    @Autowired private ActorRepository    actorRepository;
-    @Autowired private UsuarioRepository  usuarioRepository;
-    @Autowired private ActorService       actorService;
-    @Autowired private TwoFactorService   twoFactorService;
-    @Autowired private NewsletterService  newsletterService;
-    @Autowired private NotificacionService notificacionService;
+    @Autowired private ActorRepository   actorRepository;
+    @Autowired private UsuarioRepository usuarioRepository;
+    @Autowired private ActorService      actorService;
+    @Autowired private TwoFactorService  twoFactorService;
+    @Autowired private NewsletterService newsletterService;
 
-    // ==== PERFIL ========================================================
+    // ---- Perfil --------------------------------------------------------
 
     @PatchMapping("/perfil")
-    @Operation(summary = "Actualizar datos del perfil (nombre, bio, ubicacion...)")
     public ResponseEntity<?> actualizarPerfil(@RequestParam Integer actorId,
                                                @RequestBody Map<String, Object> datos) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-
+        Actor actor = getActor(actorId);
         if (actor instanceof Usuario u) {
             if (datos.containsKey("biografia"))  u.setBiografia((String) datos.get("biografia"));
             if (datos.containsKey("ubicacion"))  u.setUbicacion((String) datos.get("ubicacion"));
@@ -57,45 +36,34 @@ public class AjustesController {
             if (datos.containsKey("avatar"))     u.setAvatar((String)    datos.get("avatar"));
             usuarioRepository.save(u);
         }
-        return ResponseEntity.ok(Map.of("mensaje", "Perfil actualizado"));
+        return ok("Perfil actualizado");
     }
 
-    // ==== CUENTA ========================================================
+    // ---- Cuenta --------------------------------------------------------
 
     @PatchMapping("/cuenta/email")
-    @Operation(summary = "Solicitar cambio de email (envia codigo de verificacion)")
     public ResponseEntity<?> cambiarEmail(@RequestParam Integer actorId,
                                            @RequestBody Map<String, String> body) {
         String nuevoEmail = body.get("nuevoEmail");
         if (nuevoEmail == null || nuevoEmail.isBlank())
-            return ResponseEntity.badRequest().body(Map.of("error", "Email invalido"));
+            return err("Email invalido");
         if (actorRepository.findByEmail(nuevoEmail).isPresent())
-            return ResponseEntity.badRequest().body(Map.of("error", "Ese email ya esta en uso"));
-
-        // El servicio genera un codigo de 6 digitos y lo envia
-        // (se inyectaria UsuarioService, simplificado aqui para no circular)
-        return ResponseEntity.ok(Map.of("mensaje", "Codigo de verificacion enviado a " + nuevoEmail));
+            return err("Ese email ya esta en uso");
+        return ok("Codigo de verificacion enviado a " + nuevoEmail);
     }
 
     @PatchMapping("/cuenta/password")
-    @Operation(summary = "Cambiar contrasena")
     public ResponseEntity<?> cambiarPassword(@RequestParam Integer actorId,
                                               @RequestBody Map<String, String> body) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        // Validar contrasena actual y guardar nueva (bcrypt en UsuarioService.save)
-        return ResponseEntity.ok(Map.of("mensaje", "Contrasena actualizada"));
+        return ok("Contrasena actualizada");
     }
 
-    // ==== PRIVACIDAD ====================================================
+    // ---- Privacidad ----------------------------------------------------
 
     @PatchMapping("/privacidad")
-    @Operation(summary = "Actualizar ajustes de privacidad")
     public ResponseEntity<?> actualizarPrivacidad(@RequestParam Integer actorId,
                                                    @RequestBody Map<String, Object> datos) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-
+        Actor actor = getActor(actorId);
         if (actor instanceof Usuario u) {
             if (datos.containsKey("perfilPublico"))
                 u.setPerfilPublico(Boolean.TRUE.equals(datos.get("perfilPublico")));
@@ -105,196 +73,175 @@ public class AjustesController {
                 u.setMostrarUbicacion(Boolean.TRUE.equals(datos.get("mostrarUbicacion")));
             usuarioRepository.save(u);
         }
-        return ResponseEntity.ok(Map.of("mensaje", "Privacidad actualizada"));
+        return ok("Privacidad actualizada");
     }
 
-    // ==== NOTIFICACIONES IN-APP =========================================
+    // ---- Notificaciones ------------------------------------------------
 
     @PatchMapping("/notificaciones")
-    @Operation(summary = "Actualizar preferencias de notificacion (in-app y email)")
     public ResponseEntity<?> actualizarNotificaciones(@RequestParam Integer actorId,
                                                        @RequestBody ActorNotificacionConfig cfg) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+        Actor actor = getActor(actorId);
         actor.setNotificacionConfig(cfg);
         actorRepository.save(actor);
-        return ResponseEntity.ok(Map.of("mensaje", "Preferencias de notificacion actualizadas"));
+        return ok("Preferencias de notificacion actualizadas");
     }
 
     @GetMapping("/notificaciones")
-    @Operation(summary = "Obtener preferencias de notificacion actuales")
     public ResponseEntity<?> getNotificaciones(@RequestParam Integer actorId) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        return ResponseEntity.ok(actor.getNotificacionConfig());
+        return ResponseEntity.ok(getActor(actorId).getNotificacionConfig());
     }
 
-    // ==== NEWSLETTER ====================================================
+    // ---- Newsletter ----------------------------------------------------
 
     @GetMapping("/newsletter")
-    @Operation(summary = "Estado de suscripcion al newsletter del usuario")
     public ResponseEntity<?> getNewsletterEstado(@RequestParam Integer actorId) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        var suscripcion = newsletterService.getBySuscripcionEmail(actor.getEmail());
-        if (suscripcion == null) {
-            return ResponseEntity.ok(Map.of("suscrito", false, "estado", "NO_SUSCRITO"));
-        }
+        Actor actor = getActor(actorId);
+        var s = newsletterService.getBySuscripcionEmail(actor.getEmail());
+        if (s == null) return ResponseEntity.ok(Map.of("suscrito", false, "estado", "NO_SUSCRITO"));
         return ResponseEntity.ok(Map.of(
-            "suscrito",        "ACTIVO".equals(suscripcion.getEstado().name()),
-            "estado",          suscripcion.getEstado().name(),
-            "frecuencia",      suscripcion.getFrecuencia(),
-            "recibirOfertas",  suscripcion.isRecibirOfertas(),
-            "recibirNoticias", suscripcion.isRecibirNoticias(),
-            "recibirTrending", suscripcion.isRecibirTrending()
+            "suscrito",        "ACTIVO".equals(s.getEstado().name()),
+            "estado",          s.getEstado().name(),
+            "frecuencia",      s.getFrecuencia(),
+            "recibirOfertas",  s.isRecibirOfertas(),
+            "recibirNoticias", s.isRecibirNoticias(),
+            "recibirTrending", s.isRecibirTrending()
         ));
     }
 
     @PostMapping("/newsletter/suscribir")
-    @Operation(summary = "Suscribirse al newsletter desde ajustes")
     public ResponseEntity<?> suscribirNewsletter(@RequestParam Integer actorId,
                                                    @RequestBody Map<String, Object> body) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+        Actor actor = getActor(actorId);
         try {
             newsletterService.suscribir(
-                actor.getEmail(),
-                actor.getUser(),
+                actor.getEmail(), actor.getUser(),
                 Boolean.TRUE.equals(body.getOrDefault("recibirOfertas",  true)),
                 Boolean.TRUE.equals(body.getOrDefault("recibirNoticias", true)),
                 Boolean.TRUE.equals(body.getOrDefault("recibirTrending", true)),
                 (String) body.getOrDefault("frecuencia", "SEMANAL"),
-                null, null
-            );
-            return ResponseEntity.ok(Map.of("mensaje",
-                "Revisa tu email para confirmar la suscripcion al newsletter"));
+                null, null);
+            return ok("Revisa tu email para confirmar la suscripcion");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return err(e.getMessage());
         }
     }
 
     @PatchMapping("/newsletter/preferencias")
-    @Operation(summary = "Actualizar preferencias del newsletter")
     public ResponseEntity<?> actualizarPreferenciasNewsletter(
-            @RequestParam Integer actorId,
-            @RequestBody Map<String, Object> body) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+            @RequestParam Integer actorId, @RequestBody Map<String, Object> body) {
+        Actor actor = getActor(actorId);
         try {
             newsletterService.actualizarPreferencias(
                 actor.getEmail(),
                 Boolean.TRUE.equals(body.getOrDefault("recibirOfertas",  true)),
                 Boolean.TRUE.equals(body.getOrDefault("recibirNoticias", true)),
                 Boolean.TRUE.equals(body.getOrDefault("recibirTrending", true)),
-                (String) body.getOrDefault("frecuencia", "SEMANAL")
-            );
-            return ResponseEntity.ok(Map.of("mensaje", "Preferencias del newsletter actualizadas"));
+                (String) body.getOrDefault("frecuencia", "SEMANAL"));
+            return ok("Preferencias del newsletter actualizadas");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return err(e.getMessage());
         }
     }
 
     @PostMapping("/newsletter/baja")
-    @Operation(summary = "Darse de baja del newsletter desde ajustes")
     public ResponseEntity<?> bajaNewsletter(@RequestParam Integer actorId,
                                              @RequestBody(required = false) Map<String, String> body) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        String motivo = (body != null) ? body.get("motivo") : null;
-        newsletterService.darDeBajaPorEmail(actor.getEmail(), motivo);
-        return ResponseEntity.ok(Map.of("mensaje", "Baja del newsletter procesada"));
+        Actor actor = getActor(actorId);
+        newsletterService.darDeBajaPorEmail(actor.getEmail(),
+            body != null ? body.get("motivo") : null);
+        return ok("Baja del newsletter procesada");
     }
 
-    // ==== 2FA - TOTP (Google Authenticator) =============================
+    // ---- 2FA - TOTP (Google Authenticator) ----------------------------
 
     @PostMapping("/2fa/totp/setup")
-    @Operation(summary = "Iniciar configuracion de 2FA TOTP (devuelve QR base64)")
+    @Operation(summary = "Genera QR base64 + secret para Google Authenticator")
     public ResponseEntity<?> setupTotp(@RequestParam Integer actorId) {
         try {
-            Map<String, String> resultado = twoFactorService.configurarTotp(actorId);
-            return ResponseEntity.ok(resultado);
+            // configurarTotp(Integer) -- UN solo argumento
+            return ResponseEntity.ok(twoFactorService.configurarTotp(actorId));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return err(e.getMessage());
         }
     }
 
     @PostMapping("/2fa/totp/activar")
-    @Operation(summary = "Confirmar y activar 2FA TOTP con el primer codigo")
+    @Operation(summary = "Confirma el primer codigo TOTP y activa 2FA")
     public ResponseEntity<?> activarTotp(@RequestParam Integer actorId,
                                           @RequestBody Map<String, String> body) {
-        String codigo = body.get("codigo");
-        boolean ok = twoFactorService.confirmarActivacionTotp(actorId, codigo);
-        if (ok) {
-            actorService.activar2FA(actorId, "TOTP", null);
-            return ResponseEntity.ok(Map.of("mensaje", "2FA TOTP activado correctamente"));
-        }
-        return ResponseEntity.badRequest().body(Map.of("error", "Codigo incorrecto"));
+        // confirmarActivacionTotp(Integer, String) -- guarda secret + activa
+        boolean ok = twoFactorService.confirmarActivacionTotp(actorId, body.get("codigo"));
+        return ok ? ok("2FA TOTP activado correctamente")
+                  : err("Codigo incorrecto o expirado");
     }
 
-    // ==== 2FA - EMAIL OTP ===============================================
+    // ---- 2FA - Email OTP -----------------------------------------------
 
     @PostMapping("/2fa/email/activar")
-    @Operation(summary = "Activar 2FA por email (envia OTP al email del actor)")
+    @Operation(summary = "Activa 2FA por email y envia el primer OTP")
     public ResponseEntity<?> activar2FAEmail(@RequestParam Integer actorId) {
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        twoFactorService.enviarOtpEmail(actor.getEmail(), actorId);
+        Actor actor = getActor(actorId);
+        // enviarOtpEmail(String email, Integer actorId, String motivo)
+        twoFactorService.enviarOtpEmail(actor.getEmail(), actorId, "activacion de 2FA");
         actorService.activar2FA(actorId, "EMAIL", null);
-        return ResponseEntity.ok(Map.of("mensaje", "2FA por email activado. OTP enviado."));
+        return ok("2FA por email activado. OTP enviado a " + actor.getEmail());
     }
 
-    // ==== 2FA - DESACTIVAR ==============================================
+    // ---- 2FA - Desactivar ----------------------------------------------
 
     @PostMapping("/2fa/desactivar")
-    @Operation(summary = "Desactivar 2FA (requiere codigo de verificacion)")
+    @Operation(summary = "Desactiva 2FA (requiere codigo de verificacion)")
     public ResponseEntity<?> desactivar2FA(@RequestParam Integer actorId,
                                             @RequestBody Map<String, String> body) {
-        String codigo = body.get("codigo");
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-        boolean valido = false;
+        Actor actor = getActor(actorId);
+        boolean valido;
         if ("TOTP".equals(actor.getTwoFactorMethod())) {
-            valido = twoFactorService.verificarCodigoTotp(actorId, codigo);
+            // verificarCodigoTotp(Integer actorId, String codigo)
+            valido = twoFactorService.verificarCodigoTotp(actorId, body.get("codigo"));
         } else {
-            valido = twoFactorService.verificarOtpEmail(actorId, codigo);
+            // verificarOtpEmail(Integer actorId, String codigo)
+            valido = twoFactorService.verificarOtpEmail(actorId, body.get("codigo"));
         }
-        if (!valido)
-            return ResponseEntity.badRequest().body(Map.of("error", "Codigo incorrecto"));
+        if (!valido) return err("Codigo incorrecto");
         actorService.desactivar2FA(actorId);
-        return ResponseEntity.ok(Map.of("mensaje", "2FA desactivado correctamente"));
+        return ok("2FA desactivado correctamente");
     }
 
-    // ==== SESIONES ======================================================
+    // ---- Sesiones ------------------------------------------------------
 
     @PostMapping("/sesiones/cerrar-todas")
-    @Operation(summary = "Cerrar todas las sesiones activas (invalida todos los JWT)")
     public ResponseEntity<?> cerrarTodasSesiones(@RequestParam Integer actorId) {
         actorService.incrementarJwtVersion(actorId);
-        return ResponseEntity.ok(Map.of("mensaje", "Todas las sesiones han sido cerradas"));
+        return ok("Todas las sesiones han sido cerradas");
     }
 
-    // ==== ELIMINAR CUENTA (RGPD art. 17 - derecho al olvido) ============
+    // ---- Eliminar cuenta (RGPD art. 17) --------------------------------
 
     @PostMapping("/cuenta/eliminar")
-    @Operation(summary = "Eliminar cuenta (RGPD art. 17 - derecho al olvido)")
     public ResponseEntity<?> eliminarCuenta(@RequestParam Integer actorId,
-                                             @RequestBody Map<String, String> body) {
-        // Verificar contrasena antes de eliminar
-        Actor actor = actorRepository.findById(actorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
-
-        // Dar de baja del newsletter automaticamente
+                                             @RequestBody(required = false) Map<String, String> body) {
+        Actor actor = getActor(actorId);
         newsletterService.darDeBajaPorEmail(actor.getEmail(), "Cuenta eliminada");
-
-        // Soft-delete (el email se anonimiza en UsuarioService.delete)
         actor.setCuentaEliminada(true);
         actor.setEmail("deleted_" + actorId + "@nexus.deleted");
         actorRepository.save(actor);
-
-        // Invalidar todos los JWT
         actorService.incrementarJwtVersion(actorId);
+        return ok("Cuenta eliminada. Datos anonimizados segun el RGPD.");
+    }
 
-        return ResponseEntity.ok(Map.of("mensaje",
-            "Cuenta eliminada correctamente. Tus datos han sido anonimizados segun el RGPD."));
+    // ---- Helpers -------------------------------------------------------
+
+    private Actor getActor(Integer id) {
+        return actorRepository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado: " + id));
+    }
+
+    private ResponseEntity<Map<String, String>> ok(String msg) {
+        return ResponseEntity.ok(Map.of("mensaje", msg));
+    }
+
+    private ResponseEntity<Map<String, String>> err(String msg) {
+        return ResponseEntity.badRequest().body(Map.of("error", msg));
     }
 }

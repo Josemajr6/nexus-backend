@@ -1,26 +1,20 @@
 package com.nexus.repository;
-
-import java.util.List;
+import com.nexus.entity.NotificacionInApp;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.transaction.annotation.Transactional;
-import com.nexus.entity.NotificacionInApp;
-
+import org.springframework.stereotype.Repository;
+import java.util.List;
+/**
+ * JpaRepository<NotificacionInApp, Integer>  <- tipo correcto
+ * Tiene: findByActorIdOrderByFechaDesc (list + paginado),
+ *        findByActorIdAndLeidaFalseOrderByFechaDesc,
+ *        countByActorIdAndLeidaFalse
+ */
+@Repository
 public interface NotificacionRepository extends JpaRepository<NotificacionInApp, Integer> {
-
-    Page<NotificacionInApp> findByReceptorIdOrderByFechaCreacionDesc(Integer receptorId, Pageable pageable);
-
-    @Query("SELECT COUNT(n) FROM NotificacionInApp n WHERE n.receptor.id = ?1 AND n.leida = false")
-    long countNoLeidasByReceptorId(Integer receptorId);
-
-    @Modifying @Transactional
-    @Query("UPDATE NotificacionInApp n SET n.leida = true WHERE n.receptor.id = ?1")
-    void marcarTodasLeidasByReceptorId(Integer receptorId);
-
-    @Modifying @Transactional
-    @Query("UPDATE NotificacionInApp n SET n.leida = true WHERE n.id = ?1")
-    void marcarLeidaById(Integer notificacionId);
+    List<NotificacionInApp> findByActorIdOrderByFechaDesc(Integer actorId);
+    List<NotificacionInApp> findByActorIdAndLeidaFalseOrderByFechaDesc(Integer actorId);
+    long countByActorIdAndLeidaFalse(Integer actorId);
+    Page<NotificacionInApp> findByActorIdOrderByFechaDesc(Integer actorId, Pageable pageable);
 }

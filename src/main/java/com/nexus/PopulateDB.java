@@ -1,30 +1,15 @@
 package com.nexus;
-
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-
 import com.nexus.entity.*;
 import com.nexus.repository.*;
-
 import java.time.LocalDateTime;
-
-/**
- * Datos de prueba iniciales.
- * Solo se ejecuta si la BD esta vacia.
- *
- * CORRECCIONES respecto a versiones anteriores:
- *  - setCategoria(Categoria) ahora recibe un objeto Categoria, NO un String
- *  - SparkVoto constructor correcto: new SparkVoto(actor, oferta, esSpark)
- *  - Producto constructor: new Producto(titulo, desc, precio, tipoOferta, actor, imagen)
- *  - actualizarBadge() y actualizarNumeroComentarios() son metodos de instancia
- */
 @Component
 public class PopulateDB implements ApplicationListener<ContextRefreshedEvent> {
-
     @Autowired private ActorRepository     actorRepository;
     @Autowired private UsuarioRepository   usuarioRepository;
     @Autowired private ProductoRepository  productoRepository;
@@ -32,200 +17,104 @@ public class PopulateDB implements ApplicationListener<ContextRefreshedEvent> {
     @Autowired private SparkVotoRepository sparkVotoRepository;
     @Autowired private CategoriaRepository categoriaRepository;
     @Autowired private PasswordEncoder     passwordEncoder;
+    private boolean done=false;
 
-    private boolean executed = false;
+    @Override @Transactional
+    public void onApplicationEvent(ContextRefreshedEvent e){
+        if(done||actorRepository.count()>0){done=true;return;} done=true;
 
-    @Override
-    @Transactional
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        if (executed) return;
-        if (actorRepository.count() > 0) { executed = true; return; }
-        executed = true;
+        // CATEGORIAS
+        Categoria el=cat("Electronica","electronica","devices","#1565C0",null,1);
+        Categoria ro=cat("Ropa","ropa","checkroom","#6A1B9A",null,2);
+        Categoria ho=cat("Hogar","hogar","home","#2E7D32",null,3);
+        Categoria ve=cat("Vehiculos","vehiculos","directions_car","#1976D2",null,4);
+        Categoria in=cat("Informatica","informatica","laptop","#00838F",null,5);
+        Categoria jg=cat("Videojuegos","videojuegos","sports_esports","#7B1FA2",null,6);
+        Categoria mo=cat("Moviles","moviles","smartphone","#1565C0",el,0);
+        Categoria au=cat("Audio","audio","headphones","#1565C0",el,1);
+        Categoria tv=cat("TV y Video","tv-video","tv","#1565C0",el,2);
+        Categoria pc=cat("PC y Portatiles","pcs","computer","#00838F",in,0);
+        Categoria sw=cat("Software","software","code","#00838F",in,1);
 
-        // ---- Categorias raiz ----------------------------------------
-        Categoria catElectronica = getOrCreate("Electronica",  "electronica",  "devices",       "#1565C0", 1);
-        Categoria catRopa        = getOrCreate("Ropa",         "ropa",         "checkroom",     "#6A1B9A", 2);
-        Categoria catHogar       = getOrCreate("Hogar",        "hogar",        "home",          "#2E7D32", 3);
-        Categoria catDeportes    = getOrCreate("Deportes",     "deportes",     "sports",        "#E65100", 4);
-        Categoria catVehiculos   = getOrCreate("Vehiculos",    "vehiculos",    "directions_car","#1976D2", 5);
-        Categoria catInformatica = getOrCreate("Informatica",  "informatica",  "laptop",        "#00838F", 6);
-        Categoria catLibros      = getOrCreate("Libros",       "libros",       "menu_book",     "#4E342E", 7);
+        // USUARIOS
+        Usuario carlos=u("carlos_vendedor","carlos@nexus.test","Vendo electronica.","Madrid");
+        Usuario maria=u("maria_nexus","maria@nexus.test","Cazadora de chollos.","Barcelona");
+        Usuario pedro=u("pedro_games","pedro@nexus.test","Gamer","Valencia");
 
-        // Sub-categorias de Electronica
-        Categoria catMoviles  = getOrCreateHija("Moviles",  "moviles",  "smartphone", catElectronica);
-        Categoria catAudio    = getOrCreateHija("Audio",    "audio",    "headphones", catElectronica);
-        Categoria catTV       = getOrCreateHija("TV y Video","tv-video","tv",         catElectronica);
-
-        // Sub-categorias de Vehiculos
-        Categoria catCoches   = getOrCreateHija("Coches",   "coches",  "directions_car", catVehiculos);
-        Categoria catMotos    = getOrCreateHija("Motos",    "motos",   "two_wheeler",    catVehiculos);
-
-        // ---- Usuarios -----------------------------------------------
-        Usuario carlos = new Usuario();
-        carlos.setUser("carlos_vendedor");
-        carlos.setEmail("carlos@nexus.test");
-        carlos.setPassword(passwordEncoder.encode("password123"));
-        carlos.setCuentaVerificada(true);
-        carlos.setAvatar("https://api.dicebear.com/7.x/avataaars/svg?seed=carlos");
-        carlos.setBiografia("Vendo articulos de electronica en buen estado.");
-        carlos.setUbicacion("Madrid");
-        usuarioRepository.save(carlos);
-
-        Usuario maria = new Usuario();
-        maria.setUser("maria_compradora");
-        maria.setEmail("maria@nexus.test");
-        maria.setPassword(passwordEncoder.encode("password123"));
-        maria.setCuentaVerificada(true);
-        maria.setAvatar("https://api.dicebear.com/7.x/avataaars/svg?seed=maria");
-        maria.setUbicacion("Barcelona");
-        usuarioRepository.save(maria);
-
-        Usuario admin = new Admin();
+        // ADMIN -- Admin NO es Usuario: usar actorRepository
+        Admin admin=new Admin();
         admin.setUser("admin");
         admin.setEmail("admin@nexus.test");
-        admin.setPassword(passwordEncoder.encode("admin123"));
+        admin.setPassword(passwordEncoder.encode("admin2026!"));
         admin.setCuentaVerificada(true);
+        admin.setNivelAcceso(3);
         actorRepository.save(admin);
 
-        // ---- Productos (wallapop) ------------------------------------
-        Producto p1 = new Producto(
-            "iPhone 14 Pro 128GB Purpura - Perfecto estado",
-            "Caja original, todos los accesorios. Sin rasgunos.",
-            750.0, TipoOferta.VENTA, carlos,
-            "https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?w=600");
-        p1.setCategoria(catMoviles);   // <-- objeto Categoria, NO String
-        p1.setMarca("Apple");
-        p1.setModelo("iPhone 14 Pro");
-        p1.setCondicion(CondicionProducto.COMO_NUEVO);
-        p1.setAdmiteEnvio(true);
-        p1.setPrecioEnvio(5.0);
-        p1.setUbicacion("Madrid");
+        // PRODUCTOS -- setCategoria recibe Categoria objeto, NUNCA String
+        Producto p1=new Producto("iPhone 14 Pro 128GB","Perfecto estado.",750.0,TipoOferta.VENTA,carlos,"https://images.unsplash.com/photo-1678685888221-cda773a3dcdb?w=800");
+        p1.setCategoria(mo); p1.setMarca("Apple"); p1.setCondicion(CondicionProducto.COMO_NUEVO);
+        p1.setAdmiteEnvio(true); p1.setPrecioEnvio(5.0); p1.setUbicacion("Madrid"); p1.setPrecioNegociable(false);
         productoRepository.save(p1);
 
-        Producto p2 = new Producto(
-            "Nike Air Max 90 Talla 42 - Usadas 3 veces",
-            "Sin defectos. Caja original.",
-            80.0, TipoOferta.VENTA, carlos,
-            "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600");
-        p2.setCategoria(catRopa);
-        p2.setMarca("Nike");
-        p2.setCondicion(CondicionProducto.MUY_BUEN_ESTADO);
-        p2.setAdmiteEnvio(true);
-        p2.setPrecioEnvio(4.0);
+        Producto p2=new Producto("Nike Air Max 90 T42","Practicamente nuevas.",80.0,TipoOferta.VENTA,carlos,"https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800");
+        p2.setCategoria(ro); p2.setMarca("Nike"); p2.setCondicion(CondicionProducto.MUY_BUEN_ESTADO);
+        p2.setAdmiteEnvio(true); p2.setPrecioEnvio(4.0); p2.setPrecioNegociable(true);
         productoRepository.save(p2);
 
-        Producto p3 = new Producto(
-            "Monitor Gaming LG 27GP850-B 27 165Hz",
-            "6 meses de uso. Sin pixel muerto.",
-            280.0, TipoOferta.VENTA, maria,
-            "https://images.unsplash.com/photo-1593640495253-23196b27a87f?w=600");
-        p3.setCategoria(catInformatica);
-        p3.setMarca("LG");
-        p3.setCondicion(CondicionProducto.BUEN_ESTADO);
-        p3.setAdmiteEnvio(true);
-        p3.setPrecioEnvio(12.0);
+        Producto p3=new Producto("Monitor LG 27GP850 27\" 165Hz","6 meses de uso.",290.0,TipoOferta.VENTA,maria,"https://images.unsplash.com/photo-1593640495253-23196b27a87f?w=800");
+        p3.setCategoria(pc); p3.setMarca("LG"); p3.setCondicion(CondicionProducto.BUEN_ESTADO);
+        p3.setAdmiteEnvio(true); p3.setPrecioEnvio(15.0); p3.setPrecioNegociable(false);
         productoRepository.save(p3);
 
-        // ---- Ofertas (chollometro) -----------------------------------
-        Oferta o1 = new Oferta();
-        o1.setTitulo("AirPods Pro 2a gen NUEVOS - Amazon");
-        o1.setDescripcion("Precio historico minimo. Incluye estuche MagSafe USB-C.");
-        o1.setPrecioOferta(199.0);
-        o1.setPrecioOriginal(279.0);
-        o1.setTienda("Amazon");
-        o1.setUrlOferta("https://amazon.es/dp/MQDY3LL");
-        o1.setCategoria(catAudio);          // objeto Categoria, NO String
-        o1.setActor(carlos);
-        o1.setSparkCount(42);
-        o1.setDripCount(3);
-        o1.setNumeroVistas(1200);
-        o1.setNumeroCompartidos(87);
-        o1.setEsActiva(true);
-        o1.actualizarBadge();
-        ofertaRepository.save(o1);
+        Producto p4=new Producto("PS5 + 3 Juegos","Todo perfecto.",450.0,TipoOferta.VENTA,pedro,"https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=800");
+        p4.setCategoria(jg); p4.setMarca("Sony"); p4.setCondicion(CondicionProducto.COMO_NUEVO);
+        p4.setAdmiteEnvio(false); p4.setUbicacion("Valencia"); p4.setPrecioNegociable(true);
+        productoRepository.save(p4);
 
-        Oferta o2 = new Oferta();
-        o2.setTitulo("Roomba i5+ Robot Aspirador - El Corte Ingles");
-        o2.setDescripcion("Minimo historico. Vaciado automatico. Envio gratis.");
-        o2.setPrecioOferta(299.0);
-        o2.setPrecioOriginal(549.0);
-        o2.setTienda("El Corte Ingles");
-        o2.setUrlOferta("https://elcorteingles.es");
-        o2.setCategoria(catHogar);
-        o2.setActor(maria);
-        o2.setSparkCount(28);
-        o2.setDripCount(1);
-        o2.setNumeroVistas(890);
-        o2.setNumeroCompartidos(44);
-        o2.setEsActiva(true);
-        o2.actualizarBadge();
-        ofertaRepository.save(o2);
+        Producto p5=new Producto("Sony WH-1000XM5","4 meses de uso.",220.0,TipoOferta.VENTA,maria,"https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=800");
+        p5.setCategoria(au); p5.setMarca("Sony"); p5.setCondicion(CondicionProducto.COMO_NUEVO);
+        p5.setAdmiteEnvio(true); p5.setPrecioEnvio(6.0); p5.setPrecioNegociable(false);
+        productoRepository.save(p5);
 
-        Oferta o3 = new Oferta();
-        o3.setTitulo("Windows 11 Pro OEM por 9.99 euros");
-        o3.setDescripcion("Key digital oficial. Activacion inmediata.");
-        o3.setPrecioOferta(9.99);
-        o3.setPrecioOriginal(145.0);
-        o3.setTienda("Kinguin");
-        o3.setUrlOferta("https://kinguin.net");
-        o3.setCategoria(catInformatica);
-        o3.setActor(carlos);
-        o3.setSparkCount(157);
-        o3.setDripCount(12);
-        o3.setNumeroVistas(4500);
-        o3.setNumeroCompartidos(320);
-        o3.setEsActiva(true);
-        o3.actualizarBadge();
-        ofertaRepository.save(o3);
+        // OFERTAS
+        Oferta o1=o("AirPods Pro 2a Gen - Minimo historico","MagSafe USB-C.",199.0,279.0,"Amazon","https://amazon.es",au,carlos,"https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?w=800",42,3,1200,87);
+        Oferta o2=o("Roomba i5+ - El Corte Ingles","Vaciado automatico.",299.0,549.0,"El Corte Ingles","https://elcorteingles.es",ho,maria,"https://images.unsplash.com/photo-1589782431773-c7b9ad4c37b2?w=800",28,1,890,44);
+        Oferta o3=o("Windows 11 Pro OEM por 9.99","Key digital.",9.99,145.0,"Kinguin","https://kinguin.net",sw,carlos,"https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=800",157,12,4500,320);
+        Oferta o4=o("Xiaomi Redmi Note 13 Pro 256GB 5G","200MP.",249.0,399.0,"MediaMarkt","https://mediamarkt.es",mo,maria,"https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=800",89,5,2100,143);
+        Oferta o5=o("PS Plus Essential 12m por 39.99","Codigo digital.",39.99,71.99,"PlayStation Store","https://store.playstation.com",jg,pedro,"https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=800",63,2,1800,95);
+        Oferta o6=o("Samsung QLED 55\" 4K 2024","120Hz.",499.0,799.0,"PcComponentes","https://pccomponentes.com",tv,carlos,"https://images.unsplash.com/photo-1593359677879-a4bb92f4834c?w=800",35,4,1100,72);
 
-        Oferta o4 = new Oferta();
-        o4.setTitulo("Xiaomi Redmi Note 13 Pro 256GB - MediaMarkt");
-        o4.setDescripcion("Mejor precio. AMOLED 200MP. 5G.");
-        o4.setPrecioOferta(249.0);
-        o4.setPrecioOriginal(399.0);
-        o4.setTienda("MediaMarkt");
-        o4.setUrlOferta("https://mediamarkt.es");
-        o4.setCategoria(catMoviles);
-        o4.setActor(maria);
-        o4.setSparkCount(89);
-        o4.setDripCount(5);
-        o4.setNumeroVistas(2100);
-        o4.setNumeroCompartidos(143);
-        o4.setEsActiva(true);
-        o4.actualizarBadge();
-        ofertaRepository.save(o4);
-
-        // ---- SparkVotos (constructor correcto) ----------------------
-        // new SparkVoto(actor, oferta, esSpark)
-        sparkVotoRepository.save(new SparkVoto(maria,  o1, true));
-        sparkVotoRepository.save(new SparkVoto(carlos, o2, true));
-        sparkVotoRepository.save(new SparkVoto(maria,  o3, true));
-        sparkVotoRepository.save(new SparkVoto(carlos, o4, true));
-
-        System.out.println("=== PopulateDB: datos de prueba creados correctamente ===");
+        sparkVotoRepository.save(new SparkVoto(maria,o1,true)); sparkVotoRepository.save(new SparkVoto(pedro,o1,true));
+        sparkVotoRepository.save(new SparkVoto(carlos,o2,true)); sparkVotoRepository.save(new SparkVoto(pedro,o2,true));
+        sparkVotoRepository.save(new SparkVoto(maria,o3,true)); sparkVotoRepository.save(new SparkVoto(pedro,o3,true));
+        sparkVotoRepository.save(new SparkVoto(carlos,o4,true)); sparkVotoRepository.save(new SparkVoto(carlos,o5,true));
+        sparkVotoRepository.save(new SparkVoto(maria,o6,true));
+        System.out.println("=== PopulateDB OK ===");
     }
 
-    // ---- Helpers --------------------------------------------------------
-
-    private Categoria getOrCreate(String nombre, String slug, String icono,
-                                   String color, int orden) {
-        return categoriaRepository.findBySlug(slug).orElseGet(() -> {
-            Categoria c = new Categoria(nombre, slug, icono);
-            c.setColor(color);
-            c.setOrden(orden);
-            c.setActiva(true);
-            return categoriaRepository.save(c);
+    private Categoria cat(String nombre,String slug,String icono,String color,Categoria parent,int orden){
+        return categoriaRepository.findBySlug(slug).orElseGet(()->{
+            Categoria c=new Categoria(nombre,slug,icono); c.setColor(color); c.setOrden(orden); c.setActiva(true);
+            if(parent!=null)c.setParent(parent); return categoriaRepository.save(c);
         });
     }
-
-    private Categoria getOrCreateHija(String nombre, String slug, String icono,
-                                       Categoria parent) {
-        return categoriaRepository.findBySlug(slug).orElseGet(() -> {
-            Categoria c = new Categoria(nombre, slug, icono);
-            c.setParent(parent);
-            c.setActiva(true);
-            c.setOrden(0);
-            return categoriaRepository.save(c);
-        });
+    private Usuario u(String user,String email,String bio,String ubicacion){
+        Usuario u=new Usuario(); u.setUser(user); u.setEmail(email);
+        u.setPassword(passwordEncoder.encode("password123")); u.setCuentaVerificada(true);
+        u.setAvatar("https://api.dicebear.com/7.x/avataaars/svg?seed="+user);
+        u.setBiografia(bio); u.setUbicacion(ubicacion); u.setPerfilPublico(true);
+        return usuarioRepository.save(u);
+    }
+    private Oferta o(String titulo,String desc,double precio,double orig,String tienda,String url,
+                     Categoria cat,Actor actor,String img,int sparks,int drips,int vistas,int comp){
+        Oferta of=new Oferta(); of.setTitulo(titulo); of.setDescripcion(desc);
+        of.setPrecioOferta(precio); of.setPrecioOriginal(orig); of.setTienda(tienda);
+        of.setUrlOferta(url);       // urlOferta, no urlExterna
+        of.setCategoria(cat);       // objeto Categoria, nunca String
+        of.setActor(actor); of.setImagenPrincipal(img);
+        of.setSparkCount(sparks); of.setDripCount(drips);
+        of.setNumeroVistas(vistas); of.setNumeroCompartidos(comp);
+        of.setEsActiva(true); of.setFechaPublicacion(LocalDateTime.now().minusHours((long)(Math.random()*72)));
+        of.actualizarBadge(); return ofertaRepository.save(of);
     }
 }

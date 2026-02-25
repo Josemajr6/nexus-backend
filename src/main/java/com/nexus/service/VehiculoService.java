@@ -6,7 +6,6 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +14,11 @@ import org.springframework.web.multipart.MultipartFile;
 import com.nexus.entity.*;
 import com.nexus.repository.*;
 
+/**
+ * VehiculoService -- todos los metodos que usa VehiculoController:
+ *   findDisponibles(), findByTipo(), getMarcasDisponibles(),
+ *   getVehiculosDeUsuario(), publicar(), update(), delete()
+ */
 @Service
 public class VehiculoService {
 
@@ -23,41 +27,65 @@ public class VehiculoService {
     @Autowired private CategoriaRepository categoriaRepository;
     @Autowired private StorageService      storageService;
 
-    // ---- CRUD basico ----------------------------------------------------
+    // ---- CRUD basico ---------------------------------------------------
 
-    public List<Vehiculo> findAll() {
-        return vehiculoRepository.findAll();
-    }
-
-    public Optional<Vehiculo> findById(Integer id) {
-        return vehiculoRepository.findById(id);
-    }
+    public List<Vehiculo>    findAll()                   { return vehiculoRepository.findAll(); }
+    public Optional<Vehiculo> findById(Integer id)       { return vehiculoRepository.findById(id); }
 
     @Transactional
-    public Vehiculo save(Vehiculo vehiculo) {
-        asegurarCategoriaVehiculos(vehiculo);
+    public Vehiculo save(Vehiculo v) {
+        asegurarCategoria(v);
+        return vehiculoRepository.save(v);
+    }
+
+    // ---- Listados especificos (VehiculoController) ----------------------
+
+    /** findDisponibles() -- VehiculoController line 33 */
+    public List<Vehiculo> findDisponibles() {
+        return vehiculoRepository.findByEstadoVehiculo(EstadoVehiculo.DISPONIBLE);
+    }
+
+    /** findByTipo(TipoVehiculo) -- VehiculoController line 35 */
+    public List<Vehiculo> findByTipo(TipoVehiculo tipo) {
+        return vehiculoRepository.findByTipoVehiculoAndEstadoVehiculo(tipo, EstadoVehiculo.DISPONIBLE);
+    }
+
+    /** getMarcasDisponibles() -- VehiculoController line 37 */
+    public List<String> getMarcasDisponibles() {
+        return vehiculoRepository.findMarcasDistintas();
+    }
+
+    /** getVehiculosDeUsuario(Integer) -- VehiculoController line 39 */
+    public List<Vehiculo> getVehiculosDeUsuario(Integer publicadorId) {
+        return vehiculoRepository.findByPublicadorIdOrderByFechaPublicacionDesc(publicadorId);
+    }
+
+    // ---- Crear / Publicar ----------------------------------------------
+
+    /**
+     * publicar(Vehiculo, Integer publicadorId) -- VehiculoController line 80.
+     * Asigna publicador, fecha y categoria automatica.
+     */
+    @Transactional
+    public Vehiculo publicar(Vehiculo vehiculo, Integer publicadorId) {
+        Actor publicador = actorRepository.findById(publicadorId)
+            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado: " + publicadorId));
+        vehiculo.setPublicador(publicador);
+        vehiculo.setFechaPublicacion(LocalDateTime.now());
+        if (vehiculo.getEstadoVehiculo() == null) vehiculo.setEstadoVehiculo(EstadoVehiculo.DISPONIBLE);
+        asegurarCategoria(vehiculo);
         return vehiculoRepository.save(vehiculo);
     }
 
+    /** Crear con imagenes adjuntas en multipart. */
     @Transactional
-    public void deleteById(Integer id) {
-        vehiculoRepository.findById(id).ifPresent(v -> {
-            v.setEstadoVehiculo(EstadoVehiculo.ELIMINADO);
-            vehiculoRepository.save(v);
-        });
-    }
-
-    // ---- Crear con imagenes --------------------------------------------
-
-    @Transactional
-    public Vehiculo crear(Vehiculo vehiculo, Integer publicadorId,
-                          List<MultipartFile> imagenes) {
+    public Vehiculo crear(Vehiculo vehiculo, Integer publicadorId, List<MultipartFile> imagenes) {
         Actor publicador = actorRepository.findById(publicadorId)
-            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado"));
+            .orElseThrow(() -> new IllegalArgumentException("Actor no encontrado: " + publicadorId));
         vehiculo.setPublicador(publicador);
         vehiculo.setFechaPublicacion(LocalDateTime.now());
         vehiculo.setEstadoVehiculo(EstadoVehiculo.DISPONIBLE);
-        asegurarCategoriaVehiculos(vehiculo);
+        asegurarCategoria(vehiculo);
 
         if (imagenes != null) {
             for (MultipartFile img : imagenes) {
@@ -71,39 +99,59 @@ public class VehiculoService {
         return vehiculoRepository.save(vehiculo);
     }
 
-    // ---- Actualizar (PATCH) --------------------------------------------
+    // ---- Actualizar ---------------------------------------------------
 
+    /**
+     * update(Integer id, Vehiculo datos) -- VehiculoController line 101 (PATCH).
+     */
     @Transactional
-    public Vehiculo actualizar(Integer id, Vehiculo datos) {
+    public Vehiculo update(Integer id, Vehiculo datos) {
         Vehiculo v = vehiculoRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Vehiculo no encontrado: " + id));
 
-        if (datos.getTitulo()        != null) v.setTitulo(datos.getTitulo());
-        if (datos.getDescripcion()   != null) v.setDescripcion(datos.getDescripcion());
-        if (datos.getPrecio()        != null) v.setPrecio(datos.getPrecio());
-        if (datos.getMarca()         != null) v.setMarca(datos.getMarca());
-        if (datos.getModelo()        != null) v.setModelo(datos.getModelo());
-        if (datos.getAnio()          != null) v.setAnio(datos.getAnio());
-        if (datos.getKilometros()    != null) v.setKilometros(datos.getKilometros());
-        if (datos.getCombustible()   != null) v.setCombustible(datos.getCombustible());
-        if (datos.getCambio()        != null) v.setCambio(datos.getCambio());
-        if (datos.getPotencia()      != null) v.setPotencia(datos.getPotencia());
-        if (datos.getCilindrada()    != null) v.setCilindrada(datos.getCilindrada());
-        if (datos.getColor()         != null) v.setColor(datos.getColor());
-        if (datos.getNumeroPuertas() != null) v.setNumeroPuertas(datos.getNumeroPuertas());
-        if (datos.getPlazas()        != null) v.setPlazas(datos.getPlazas());
-        if (datos.getUbicacion()     != null) v.setUbicacion(datos.getUbicacion());
-        if (datos.getTipoVehiculo()  != null) v.setTipoVehiculo(datos.getTipoVehiculo());
-        if (datos.getEstadoVehiculo()!= null) v.setEstadoVehiculo(datos.getEstadoVehiculo());
-        if (datos.getTipoOferta()    != null) v.setTipoOferta(datos.getTipoOferta());
-        if (datos.getCondicion()     != null) v.setCondicion(datos.getCondicion());
-        if (datos.getItv()           != null) v.setItv(datos.getItv());
-        if (datos.getGarantia()      != null) v.setGarantia(datos.getGarantia());
+        if (datos.getTitulo()         != null) v.setTitulo(datos.getTitulo());
+        if (datos.getDescripcion()    != null) v.setDescripcion(datos.getDescripcion());
+        if (datos.getPrecio()         != null) v.setPrecio(datos.getPrecio());
+        if (datos.getMarca()          != null) v.setMarca(datos.getMarca());
+        if (datos.getModelo()         != null) v.setModelo(datos.getModelo());
+        if (datos.getAnio()           != null) v.setAnio(datos.getAnio());
+        if (datos.getKilometros()     != null) v.setKilometros(datos.getKilometros());
+        if (datos.getCombustible()    != null) v.setCombustible(datos.getCombustible());
+        if (datos.getCambio()         != null) v.setCambio(datos.getCambio());
+        if (datos.getPotencia()       != null) v.setPotencia(datos.getPotencia());
+        if (datos.getCilindrada()     != null) v.setCilindrada(datos.getCilindrada());
+        if (datos.getColor()          != null) v.setColor(datos.getColor());
+        if (datos.getNumeroPuertas()  != null) v.setNumeroPuertas(datos.getNumeroPuertas());
+        if (datos.getPlazas()         != null) v.setPlazas(datos.getPlazas());
+        if (datos.getUbicacion()      != null) v.setUbicacion(datos.getUbicacion());
+        if (datos.getTipoVehiculo()   != null) v.setTipoVehiculo(datos.getTipoVehiculo());
+        if (datos.getEstadoVehiculo() != null) v.setEstadoVehiculo(datos.getEstadoVehiculo());
+        if (datos.getTipoOferta()     != null) v.setTipoOferta(datos.getTipoOferta());
+        if (datos.getCondicion()      != null) v.setCondicion(datos.getCondicion());
+        if (datos.getItv()            != null) v.setItv(datos.getItv());
+        if (datos.getGarantia()       != null) v.setGarantia(datos.getGarantia());
 
         return vehiculoRepository.save(v);
     }
 
-    // ---- Busqueda con filtros ------------------------------------------
+    // ---- Eliminar (soft-delete) ----------------------------------------
+
+    /**
+     * delete(Integer id) -- VehiculoController line 110.
+     */
+    @Transactional
+    public void delete(Integer id) {
+        vehiculoRepository.findById(id).ifPresent(v -> {
+            v.setEstadoVehiculo(EstadoVehiculo.ELIMINADO);
+            vehiculoRepository.save(v);
+        });
+    }
+
+    /** Alias para deleteById */
+    @Transactional
+    public void deleteById(Integer id) { delete(id); }
+
+    // ---- Busqueda con filtros -----------------------------------------
 
     public Page<Vehiculo> buscarConFiltros(String tipo, String marca,
                                             Integer anioMin, Integer anioMax,
@@ -115,23 +163,17 @@ public class VehiculoService {
             precioMin, precioMax, combustible, cambio, pageable);
     }
 
-    public List<Vehiculo> getByPublicadorId(Integer publicadorId) {
-        return vehiculoRepository.findByPublicadorIdOrderByFechaPublicacionDesc(publicadorId);
-    }
+    // ---- Helper ---------------------------------------------------------
 
-    // ---- Helper: asignar categoria "Vehiculos" automaticamente ----------
-
-    private void asegurarCategoriaVehiculos(Vehiculo vehiculo) {
-        if (vehiculo.getCategoria() != null) return;
-        Categoria cat = categoriaRepository.findBySlug("vehiculos")
-            .orElseGet(() -> {
-                // Crear la categoria si no existe
-                Categoria nueva = new Categoria("Vehiculos", "vehiculos", "directions_car");
-                nueva.setColor("#1976D2");
-                nueva.setOrden(5);
-                nueva.setActiva(true);
-                return categoriaRepository.save(nueva);
-            });
-        vehiculo.setCategoria(cat);
+    private void asegurarCategoria(Vehiculo v) {
+        if (v.getCategoria() != null) return;
+        Categoria cat = categoriaRepository.findBySlug("vehiculos").orElseGet(() -> {
+            Categoria nueva = new Categoria("Vehiculos", "vehiculos", "directions_car");
+            nueva.setColor("#1976D2");
+            nueva.setOrden(5);
+            nueva.setActiva(true);
+            return categoriaRepository.save(nueva);
+        });
+        v.setCategoria(cat);
     }
 }

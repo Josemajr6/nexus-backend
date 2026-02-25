@@ -1,157 +1,49 @@
 package com.nexus.service;
-
-import java.util.Map;
-
+import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import com.nexus.entity.*;
 import com.nexus.repository.*;
-
 /**
- * Notificaciones en la app sin Firebase.
- *
- * Flujo:
- *  1. Se guarda NotificacionInApp en BD
- *  2. Se publica por WebSocket → Angular actualiza el badge en tiempo real
- *  3. Si el usuario tiene la preferencia activa, se manda un email
- *
- * Angular — suscribirse al badge (campana del navbar):
- *   client.subscribe(`/user/${userId}/queue/notificaciones`, msg => {
- *     const { noLeidas } = JSON.parse(msg.body);
- *     this.badgeCount = noLeidas;
- *   });
+ * Usa NotificacionInApp (no "Notificacion").
+ * getNotificaciones(Integer, int, int) requerido por NotificacionController line 44.
  */
 @Service
 public class NotificacionService {
-
     @Autowired private NotificacionRepository notificacionRepository;
     @Autowired private ActorRepository        actorRepository;
     @Autowired private SimpMessagingTemplate  messagingTemplate;
-    @Autowired private EmailService           emailService;
 
-    // ── Método central ────────────────────────────────────────────────────
+    public List<NotificacionInApp> getNoLeidas(Integer actorId) { return notificacionRepository.findByActorIdAndLeidaFalseOrderByFechaDesc(actorId); }
+    public List<NotificacionInApp> getTodas(Integer actorId)    { return notificacionRepository.findByActorIdOrderByFechaDesc(actorId); }
+    public Page<NotificacionInApp> getNotificaciones(Integer actorId, int page, int size) { return notificacionRepository.findByActorIdOrderByFechaDesc(actorId,PageRequest.of(page,size)); }
+    public long countNoLeidas(Integer actorId) { return notificacionRepository.countByActorIdAndLeidaFalse(actorId); }
 
-    @Async
-    @Transactional
-    public void notificar(Integer receptorId, TipoNotificacion tipo,
-                           String titulo, String cuerpo,
-                           String enlace, Integer referenciaId) {
-        Actor receptor = actorRepository.findById(receptorId).orElse(null);
-        if (receptor == null || receptor.isCuentaEliminada()) return;
-
-        NotificacionInApp n = new NotificacionInApp();
-        n.setReceptor(receptor);
-        n.setTipo(tipo);
-        n.setTitulo(titulo);
-        n.setCuerpo(cuerpo);
-        n.setEnlace(enlace);
-        n.setReferenciaId(referenciaId);
-        notificacionRepository.save(n);
-
-        long noLeidas = notificacionRepository.countNoLeidasByReceptorId(receptorId);
-        messagingTemplate.convertAndSendToUser(
-            receptorId.toString(),
-            "/queue/notificaciones",
-            Map.of(
-                "id",       n.getId(),
-                "tipo",     tipo.name(),
-                "titulo",   titulo,
-                "cuerpo",   cuerpo,
-                "enlace",   enlace != null ? enlace : "",
-                "noLeidas", noLeidas
-            )
-        );
-
-        ActorNotificacionConfig cfg = receptor.getNotificacionConfig();
-        if (cfg != null && debeEnviarEmail(tipo, cfg)) {
-            emailService.enviarEmail(receptor.getEmail(), titulo, cuerpo);
-        }
-    }
-
-    /** Shortcut para notificaciones simples de sistema */
-    @Async
-    public void notificarActorPorId(Integer receptorId, String titulo) {
-        notificar(receptorId, TipoNotificacion.SISTEMA, titulo, titulo, null, null);
-    }
-
-    // ── Especializados ────────────────────────────────────────────────────
-
-    @Async
-    public void notificarNuevaMensaje(Integer receptorId, String remitente, Integer productoId) {
-        notificar(receptorId, TipoNotificacion.NUEVO_MENSAJE,
-            "Nuevo mensaje de " + remitente,
-            remitente + " te ha enviado un mensaje",
-            "/chat/" + productoId, productoId);
-    }
-
-    @Async
-    public void notificarNuevaCompra(Integer vendedorId, String tituloProducto, Integer compraId) {
-        notificar(vendedorId, TipoNotificacion.NUEVA_COMPRA,
-            "Nueva venta",
-            "Han comprado: " + tituloProducto,
-            "/mis-ventas/" + compraId, compraId);
-    }
-
-    @Async
-    public void notificarEstadoEnvio(Integer compradorId, String estado, Integer envioId) {
-        notificar(compradorId, TipoNotificacion.ESTADO_ENVIO,
-            "Actualizacion de tu pedido",
-            estado,
-            "/mis-compras/" + envioId, envioId);
-    }
-
-    @Async
-    public void notificarNuevaValoracion(Integer vendedorId, Integer estrellas, String tituloProducto) {
-        notificar(vendedorId, TipoNotificacion.NUEVA_VALORACION,
-            "Nueva valoracion: " + estrellas + " estrellas",
-            "Han valorado tu venta de \"" + tituloProducto + "\"",
-            "/mis-valoraciones", null);
-    }
-
-    @Async
-    public void notificarNuevoVoto(Integer publicadorId, String tituloOferta, int score) {
-        notificar(publicadorId, TipoNotificacion.NUEVO_VOTO,
-            "Tu oferta esta en tendencia",
-            "\"" + tituloOferta + "\" tiene " + score + " SparkVotos",
-            "/ofertas", null);
-    }
-
-    // ── Lectura ────────────────────────────────────────────────────────────
-
-    public Page<NotificacionInApp> getNotificaciones(Integer receptorId, int page, int size) {
-        return notificacionRepository.findByReceptorIdOrderByFechaCreacionDesc(
-            receptorId, PageRequest.of(page, size));
-    }
-
-    public long getNoLeidas(Integer receptorId) {
-        return notificacionRepository.countNoLeidasByReceptorId(receptorId);
-    }
+    @Transactional public void marcarLeida(Integer id) { notificacionRepository.findById(id).ifPresent(n->{n.setLeida(true);notificacionRepository.save(n);}); }
+    @Transactional public void marcarTodasLeidas(Integer actorId) { getNoLeidas(actorId).forEach(n->{n.setLeida(true);notificacionRepository.save(n);}); }
+    @Transactional public void eliminar(Integer id) { notificacionRepository.deleteById(id); }
 
     @Transactional
-    public void marcarTodasLeidas(Integer receptorId) {
-        notificacionRepository.marcarTodasLeidasByReceptorId(receptorId);
+    public NotificacionInApp crear(Integer actorId, TipoNotificacion tipo, String titulo, String mensaje, String url) {
+        Actor actor=actorRepository.findById(actorId).orElse(null); if(actor==null)return null;
+        NotificacionInApp n=new NotificacionInApp();
+        n.setActor(actor); n.setTipo(tipo); n.setTitulo(titulo); n.setMensaje(mensaje); n.setUrl(url); n.setLeida(false); n.setFecha(LocalDateTime.now());
+        NotificacionInApp g=notificacionRepository.save(n);
+        try{messagingTemplate.convertAndSendToUser(actorId.toString(),"/queue/notificaciones",g);}catch(Exception e){System.err.println("WS: "+e.getMessage());}
+        return g;
     }
-
-    @Transactional
-    public void marcarLeida(Integer notificacionId) {
-        notificacionRepository.marcarLeidaById(notificacionId);
-    }
-
-    // ── Privado ────────────────────────────────────────────────────────────
-
-    private boolean debeEnviarEmail(TipoNotificacion tipo, ActorNotificacionConfig cfg) {
-        return switch (tipo) {
-            case NUEVO_MENSAJE                              -> Boolean.TRUE.equals(cfg.getEmailNuevoMensaje());
-            case NUEVA_COMPRA                               -> Boolean.TRUE.equals(cfg.getEmailNuevaCompra());
-            case ESTADO_ENVIO, PEDIDO_ENVIADO,
-                 ENTREGA_CONFIRMADA                         -> Boolean.TRUE.equals(cfg.getEmailEstadoEnvio());
-            default                                        -> false;
-        };
-    }
+    public void notificarNuevoMensaje(Integer id, String remitente)     { crear(id,TipoNotificacion.NUEVO_MENSAJE,"Nuevo mensaje","Tienes un nuevo mensaje de "+remitente,"/chat"); }
+    public void notificarNuevaCompra(Integer id, String titulo)          { crear(id,TipoNotificacion.NUEVA_COMPRA,"Nueva venta","Han comprado tu producto: "+titulo,"/ventas"); }
+    public void notificarCompraConfirmada(Integer id, String titulo)     { crear(id,TipoNotificacion.COMPRA_CONFIRMADA,"Compra confirmada","Tu compra de "+titulo+" ha sido confirmada","/compras"); }
+    public void notificarEnvio(Integer id, String titulo)                { crear(id,TipoNotificacion.ENVIO_ACTUALIZADO,"Pedido enviado","Tu pedido de "+titulo+" ha sido enviado","/compras"); }
+    public void notificarNuevaValoracion(Integer id, int puntuacion)     { crear(id,TipoNotificacion.NUEVA_VALORACION,"Nueva valoracion","Has recibido "+puntuacion+" estrellas","/perfil"); }
+    public void notificarSparkEnOferta(Integer id, String titulo)        { crear(id,TipoNotificacion.SPARK_EN_OFERTA,"Tu oferta tiene nuevos votos","\""+titulo+"\" ha recibido Sparks","/ofertas"); }
+    public void notificarNuevoComentario(Integer id, String titulo)      { crear(id,TipoNotificacion.NUEVO_COMENTARIO,"Nuevo comentario","Han comentado en: "+titulo,"/publicaciones"); }
+    public void notificarDevolucion(Integer id, String titulo)           { crear(id,TipoNotificacion.DEVOLUCION,"Solicitud de devolucion","Han solicitado devolucion de: "+titulo,"/ventas"); }
+    public void notificarSistema(Integer id, String mensaje)             { crear(id,TipoNotificacion.SISTEMA,"Notificacion del sistema",mensaje,null); }
 }
