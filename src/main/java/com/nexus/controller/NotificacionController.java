@@ -9,56 +9,79 @@ import org.springframework.web.bind.annotation.*;
 
 import com.nexus.entity.NotificacionInApp;
 import com.nexus.service.NotificacionService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
- * Panel de notificaciones (campana 🔔).
- *
- * Angular — badge de notificaciones:
- *   // Suscribirse al WebSocket para actualizaciones en tiempo real:
- *   client.subscribe(`/user/${userId}/queue/notificaciones`, msg => {
- *     const { noLeidas } = JSON.parse(msg.body);
- *     this.badgeCount = noLeidas;
- *   });
- *
- *   // Al abrir el panel de notificaciones:
- *   GET /notificaciones?receptorId=5&page=0&size=20
- *
- *   // Al marcar todo como leído:
- *   PATCH /notificaciones/leer-todas?receptorId=5
+ * Fix line 50: getNoLeidas() devuelve List<NotificacionInApp> pero el endpoint
+ * espera Map<String,Long>.  Usar countNoLeidas() que devuelve long directamente.
  */
 @RestController
-@RequestMapping("/notificaciones")
-@Tag(name = "Notificaciones", description = "Campana 🔔 — sin Firebase, solo WebSocket + BD")
+@RequestMapping("/api/notificaciones")
+@Tag(name = "Notificaciones", description = "Gestion de notificaciones in-app")
 public class NotificacionController {
 
-    @Autowired private NotificacionService notificacionService;
+    @Autowired
+    private NotificacionService notificacionService;
 
-    @GetMapping
+    /**
+     * Listado paginado.
+     * GET /api/notificaciones/{actorId}?page=0&size=20
+     */
+    @GetMapping("/{actorId}")
     @Operation(summary = "Listar notificaciones paginadas")
     public ResponseEntity<Page<NotificacionInApp>> listar(
-            @RequestParam Integer receptorId,
-            @RequestParam(defaultValue = "0") int page,
+            @PathVariable Integer actorId,
+            @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(notificacionService.getNotificaciones(receptorId, page, size));
+        return ResponseEntity.ok(notificacionService.getNotificaciones(actorId, page, size));
     }
 
-    @GetMapping("/no-leidas/{receptorId}")
-    @Operation(summary = "Número de notificaciones no leídas (para el badge)")
-    public ResponseEntity<Map<String, Long>> noLeidas(@PathVariable Integer receptorId) {
-        return ResponseEntity.ok(Map.of("noLeidas", notificacionService.getNoLeidas(receptorId)));
+    /**
+     * Numero de no leidas (para el badge del icono).
+     * GET /api/notificaciones/no-leidas/{actorId}
+     *
+     * FIX line 50: usa countNoLeidas() -> long, no getNoLeidas() -> List
+     * Devuelve Map<String,Long> como exige la firma del metodo.
+     */
+    @GetMapping("/no-leidas/{actorId}")
+    @Operation(summary = "Numero de notificaciones no leidas (badge)")
+    public ResponseEntity<Map<String, Long>> noLeidas(@PathVariable Integer actorId) {
+        long count = notificacionService.countNoLeidas(actorId);
+        return ResponseEntity.ok(Map.of("noLeidas", count));
     }
 
-    @PatchMapping("/{id}/leer")
-    public ResponseEntity<?> marcarLeida(@PathVariable Integer id) {
+    /**
+     * Marcar una notificacion como leida.
+     * PUT /api/notificaciones/{id}/leer
+     */
+    @PutMapping("/{id}/leer")
+    @Operation(summary = "Marcar notificacion como leida")
+    public ResponseEntity<Void> marcarLeida(@PathVariable Integer id) {
         notificacionService.marcarLeida(id);
-        return ResponseEntity.ok(Map.of("mensaje", "Notificación marcada como leída"));
+        return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/leer-todas")
-    public ResponseEntity<?> marcarTodasLeidas(@RequestParam Integer receptorId) {
-        notificacionService.marcarTodasLeidas(receptorId);
-        return ResponseEntity.ok(Map.of("mensaje", "Todas las notificaciones marcadas como leídas"));
+    /**
+     * Marcar todas como leidas.
+     * PUT /api/notificaciones/leer-todas/{actorId}
+     */
+    @PutMapping("/leer-todas/{actorId}")
+    @Operation(summary = "Marcar todas como leidas")
+    public ResponseEntity<Void> marcarTodasLeidas(@PathVariable Integer actorId) {
+        notificacionService.marcarTodasLeidas(actorId);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Eliminar notificacion.
+     * DELETE /api/notificaciones/{id}
+     */
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Eliminar notificacion")
+    public ResponseEntity<Void> eliminar(@PathVariable Integer id) {
+        notificacionService.eliminar(id);
+        return ResponseEntity.noContent().build();
     }
 }

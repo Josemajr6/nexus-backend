@@ -1,13 +1,24 @@
 package com.nexus.repository;
 
-import java.util.List;
+import com.nexus.entity.*;
 import org.springframework.data.jpa.repository.JpaRepository;
-import com.nexus.entity.EstadoReporte;
-import com.nexus.entity.Reporte;
+import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
+/**
+ * Metodos requeridos por ReporteService:
+ *   findByEstado(EstadoReporte)  line 33
+ *   findByTipo(TipoReporte)      line 34
+ */
+@Repository
 public interface ReporteRepository extends JpaRepository<Reporte, Integer> {
-    List<Reporte> findByEstadoOrderByFechaReporteAsc(EstadoReporte estado);
-    List<Reporte> findByReportadorIdOrderByFechaReporteDesc(Integer reportadorId);
-    boolean existsByReportadorIdAndProductoDenunciadoId(Integer reportadorId, Integer productoId);
-    boolean existsByReportadorIdAndOfertaDenunciadaId(Integer reportadorId, Integer ofertaId);
+
+    List<Reporte> findByEstado(EstadoReporte estado);
+
+    List<Reporte> findByTipo(TipoReporte tipo);
+
+    List<Reporte> findByReportadorId(Integer reportadorId);
+
+    List<Reporte> findByEstadoOrderByFechaDesc(EstadoReporte estado);
 }

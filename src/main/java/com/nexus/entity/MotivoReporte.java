@@ -1,11 +1,18 @@
 package com.nexus.entity;
+/**
+ * Motivos para reportar contenido.
+ * Requerido por ReporteService (setMotivo recibe MotivoReporte, no String)
+ * y por ReporteController: reportar(Integer, TipoReporte, MotivoReporte, String, Integer)
+ */
 public enum MotivoReporte {
     SPAM,
     CONTENIDO_INAPROPIADO,
-    FRAUDE_ESTAFA,
-    ACOSO,
     PRODUCTO_FALSO,
+    PRECIO_INCORRECTO,
     INFORMACION_FALSA,
-    DERECHOS_AUTOR,
+    ACOSO,
+    FRAUDE,
+    DUPLICADO,
+    PROHIBIDO,
     OTRO
 }

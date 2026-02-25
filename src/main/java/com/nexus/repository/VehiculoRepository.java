@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import com.nexus.entity.EstadoVehiculo;
+import com.nexus.entity.TipoCombustible;
 import com.nexus.entity.TipoVehiculo;
 import com.nexus.entity.Vehiculo;
 
@@ -35,4 +36,9 @@ public interface VehiculoRepository extends JpaRepository<Vehiculo, Integer> {
     @Query("SELECT DISTINCT v.marca FROM Vehiculo v " +
            "WHERE v.estadoVehiculo = 'DISPONIBLE' AND v.marca IS NOT NULL ORDER BY v.marca")
     List<String> findMarcasDistintas();
+    
+    @Query("SELECT v FROM Vehiculo v WHERE ... ") // Tu query aquí
+    Page<Vehiculo> buscarPaginado(TipoVehiculo tipo, String marca, String modelo,
+                                  Double precioMin, Double precioMax, Integer anioMin,
+                                  Integer kmMax, TipoCombustible combustible, Pageable pageable);
 }
