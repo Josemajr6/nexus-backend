@@ -32,7 +32,7 @@ public class ValoracionService {
         Compra compra=compraRepository.findById(compraId).orElseThrow(()->new IllegalArgumentException("Compra no encontrada"));
         if(!compra.getComprador().getId().equals(comprador.getId()))throw new IllegalArgumentException("Compra no pertenece al comprador");
         if(valoracionRepository.findByCompraId(compraId).isPresent())throw new IllegalStateException("Ya valorada");
-        if(compra.getEstado()!=EstadoCompra.COMPLETADA&&compra.getEstado()!=EstadoCompra.ENTREGADA)throw new IllegalStateException("Compra no completada");
+        if(compra.getEstado()!=EstadoCompra.COMPLETADA&&compra.getEstado()!=EstadoCompra.ENTREGADO)throw new IllegalStateException("Compra no completada");
         if(puntuacion==null||puntuacion<1||puntuacion>5)throw new IllegalArgumentException("Puntuacion 1-5");
         Valoracion v=new Valoracion(); v.setComprador((Usuario)comprador); v.setVendedor(compra.getVendedor()); v.setCompra(compra); v.setPuntuacion(puntuacion); v.setComentario(comentario);
         Valoracion g=valoracionRepository.save(v); actualizarReputacion(compra.getVendedor().getId()); return g;

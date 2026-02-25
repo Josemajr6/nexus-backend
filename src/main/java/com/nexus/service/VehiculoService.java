@@ -45,6 +45,15 @@ public class VehiculoService {
         return vehiculoRepository.findByEstadoVehiculo(EstadoVehiculo.DISPONIBLE);
     }
 
+    
+ // En VehiculoService.java
+    public Page<Vehiculo> buscarPaginado(TipoVehiculo tipo, String marca, String modelo,
+                                         Double precioMin, Double precioMax, Integer anioMin,
+                                         Integer kmMax, TipoCombustible combustible, Pageable pageable) {
+        // Asumiendo que crearás o ya tienes este método en tu VehiculoRepository
+        return vehiculoRepository.buscarPaginado(tipo, marca, modelo, precioMin, precioMax, anioMin, kmMax, combustible, pageable);
+    }
+    
     /** findByTipo(TipoVehiculo) -- VehiculoController line 35 */
     public List<Vehiculo> findByTipo(TipoVehiculo tipo) {
         return vehiculoRepository.findByTipoVehiculoAndEstadoVehiculo(tipo, EstadoVehiculo.DISPONIBLE);

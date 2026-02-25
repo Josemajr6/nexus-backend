@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.nexus.entity.TipoCombustible;
 import com.nexus.entity.TipoVehiculo;
 import com.nexus.entity.Vehiculo;
 import com.nexus.service.StorageService;
