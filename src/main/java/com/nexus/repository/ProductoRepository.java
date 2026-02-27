@@ -12,7 +12,7 @@ import com.nexus.entity.Producto;
 @Repository
 public interface ProductoRepository extends JpaRepository<Producto, Integer> {
 
-    List<Producto> findByPublicadorIdOrderByFechaPublicacionDesc(Integer publicadorId);
+	List<Producto> findByVendedorIdOrderByFechaPublicacionDesc(Integer id);
 
     List<Producto> findByEstadoProducto(EstadoProducto estado);
 
