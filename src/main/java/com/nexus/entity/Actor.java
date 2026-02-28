@@ -10,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 @Inheritance(strategy = InheritanceType.JOINED)
 public abstract class Actor extends DomainEntity {
 
-    @Column(nullable = false, unique = true)
+	@Column(name = "username", nullable = false, unique = true)
     private String user;
 
     @Column(nullable = false, unique = true)
